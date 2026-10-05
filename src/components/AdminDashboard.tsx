@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { ShieldCheck, Users, Building2, Truck, Droplet, AlertTriangle, CheckCircle, Clock, ExternalLink } from 'lucide-react';
+import { ShieldCheck, Users, Building2, Truck, Droplet, AlertTriangle, CheckCircle, Clock } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
+import { FacilityDistributionSection } from './FacilityDistributionSection';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -123,93 +124,98 @@ export const AdminDashboard: React.FC = () => {
 
       {/* TAB 1: OVERVIEW & VISUAL CHARTS */}
       {activeTab === 'overview' && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Visual Chart 1: Bed Capacity by Major Division */}
-          <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-card-soft space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-display font-bold text-lg text-slate-900">
-                  Regional Emergency Bed Capacity & Availability
-                </h3>
-                <p className="text-xs text-slate-500">Comprehensive Regional Emergency Bed Overview</p>
-              </div>
-              <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
-                Division Breakdown
-              </span>
-            </div>
-
-            {/* Custom Modern Bar Visualization */}
-            <div className="space-y-3.5 pt-2">
-              {[
-                { div: 'Dhaka Division (DMCH, Square, BSMMU, Suhrawardy)', total: 6800, available: 42, color: 'bg-red-600' },
-                { div: 'Chattogram Division (CMCH)', total: 2200, available: 32, color: 'bg-blue-600' },
-                { div: 'Sylhet Division (MAG Osmani)', total: 1500, available: 26, color: 'bg-emerald-600' },
-                { div: 'Rajshahi Division (RMCH)', total: 1200, available: 20, color: 'bg-amber-600' },
-                { div: 'Khulna Division (KMCH)', total: 1000, available: 18, color: 'bg-purple-600' },
-              ].map((item, idx) => (
-                <div key={idx} className="space-y-1">
-                  <div className="flex justify-between text-xs font-semibold text-slate-700">
-                    <span>{item.div}</span>
-                    <span>
-                      {item.available} ICU beds open • <strong>{item.total.toLocaleString()} total beds</strong>
-                    </span>
-                  </div>
-                  <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
-                    <div
-                      className={`h-full ${item.color} rounded-full`}
-                      style={{ width: `${Math.min(100, (item.total / 7000) * 100)}%` }}
-                    ></div>
-                  </div>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Visual Chart 1: Bed Capacity by Major Division */}
+            <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-200 p-6 shadow-card-soft space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-display font-bold text-lg text-slate-900">
+                    Regional Emergency Bed Capacity & Availability
+                  </h3>
+                  <p className="text-xs text-slate-500">Comprehensive Regional Emergency Bed Overview</p>
                 </div>
-              ))}
-            </div>
+                <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
+                  Division Breakdown
+                </span>
+              </div>
 
-            {/* Directory Notice */}
-            <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between text-xs text-slate-600">
-              <span className="flex items-center gap-1.5">
-                <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Verified Bangladesh Healthcare Facility Database</span>
-              </span>
-              <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">
-                ● Live Directory
-              </span>
-            </div>
-          </div>
-
-          {/* Blood Supply Distribution by Group */}
-          <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-card-soft space-y-4">
-            <h3 className="font-display font-bold text-lg text-slate-900">
-              Registered Donors by Blood Group
-            </h3>
-            <p className="text-xs text-slate-500">Live emergency donor readiness</p>
-
-            <div className="grid grid-cols-2 gap-2.5 pt-2">
-              {[
-                { grp: 'O+', count: donors.filter(d => d.bloodGroup === 'O+').length, status: 'Adequate' },
-                { grp: 'A+', count: donors.filter(d => d.bloodGroup === 'A+').length, status: 'Adequate' },
-                { grp: 'B+', count: donors.filter(d => d.bloodGroup === 'B+').length, status: 'Adequate' },
-                { grp: 'AB+', count: donors.filter(d => d.bloodGroup === 'AB+').length, status: 'Moderate' },
-                { grp: 'O-', count: donors.filter(d => d.bloodGroup === 'O-').length, status: 'Critical / Rare' },
-                { grp: 'A-', count: donors.filter(d => d.bloodGroup === 'A-').length, status: 'Rare' },
-                { grp: 'B-', count: donors.filter(d => d.bloodGroup === 'B-').length, status: 'Rare' },
-                { grp: 'AB-', count: donors.filter(d => d.bloodGroup === 'AB-').length, status: 'Critical' },
-              ].map((b, i) => (
-                <div key={i} className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="w-8 h-8 rounded-lg bg-red-600 text-white font-bold font-display text-sm flex items-center justify-center">
-                      {b.grp}
-                    </span>
-                    <div>
-                      <span className="text-xs font-bold text-slate-900 block">{b.count} Donors</span>
-                      <span className={`text-[10px] font-semibold ${b.status.includes('Critical') ? 'text-red-600' : 'text-slate-500'}`}>
-                        {b.status}
+              {/* Custom Modern Bar Visualization */}
+              <div className="space-y-3.5 pt-2">
+                {[
+                  { div: 'Dhaka Division (DMCH, Square, BSMMU, Suhrawardy)', total: 6800, available: 42, color: 'bg-red-600' },
+                  { div: 'Chattogram Division (CMCH)', total: 2200, available: 32, color: 'bg-blue-600' },
+                  { div: 'Sylhet Division (MAG Osmani)', total: 1500, available: 26, color: 'bg-emerald-600' },
+                  { div: 'Rajshahi Division (RMCH)', total: 1200, available: 20, color: 'bg-amber-600' },
+                  { div: 'Khulna Division (KMCH)', total: 1000, available: 18, color: 'bg-purple-600' },
+                ].map((item, idx) => (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex justify-between text-xs font-semibold text-slate-700">
+                      <span>{item.div}</span>
+                      <span>
+                        {item.available} ICU beds open • <strong>{item.total.toLocaleString()} total beds</strong>
                       </span>
                     </div>
+                    <div className="h-3 w-full bg-slate-100 rounded-full overflow-hidden flex">
+                      <div
+                        className={`h-full ${item.color} rounded-full`}
+                        style={{ width: `${Math.min(100, (item.total / 7000) * 100)}%` }}
+                      ></div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
+              {/* Directory Notice */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between text-xs text-slate-600">
+                <span className="flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                  <span>Verified Bangladesh Healthcare Facility Database</span>
+                </span>
+                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">
+                  ● Live Directory
+                </span>
+              </div>
+            </div>
+
+            {/* Blood Supply Distribution by Group */}
+            <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-card-soft space-y-4">
+              <h3 className="font-display font-bold text-lg text-slate-900">
+                Registered Donors by Blood Group
+              </h3>
+              <p className="text-xs text-slate-500">Live emergency donor readiness</p>
+
+              <div className="grid grid-cols-2 gap-2.5 pt-2">
+                {[
+                  { grp: 'O+', count: donors.filter(d => d.bloodGroup === 'O+').length, status: 'Adequate' },
+                  { grp: 'A+', count: donors.filter(d => d.bloodGroup === 'A+').length, status: 'Adequate' },
+                  { grp: 'B+', count: donors.filter(d => d.bloodGroup === 'B+').length, status: 'Adequate' },
+                  { grp: 'AB+', count: donors.filter(d => d.bloodGroup === 'AB+').length, status: 'Moderate' },
+                  { grp: 'O-', count: donors.filter(d => d.bloodGroup === 'O-').length, status: 'Critical / Rare' },
+                  { grp: 'A-', count: donors.filter(d => d.bloodGroup === 'A-').length, status: 'Rare' },
+                  { grp: 'B-', count: donors.filter(d => d.bloodGroup === 'B-').length, status: 'Rare' },
+                  { grp: 'AB-', count: donors.filter(d => d.bloodGroup === 'AB-').length, status: 'Critical' },
+                ].map((b, i) => (
+                  <div key={i} className="bg-slate-50 p-3 rounded-xl border border-slate-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="w-8 h-8 rounded-lg bg-red-600 text-white font-bold font-display text-sm flex items-center justify-center">
+                        {b.grp}
+                      </span>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 block">{b.count} Donors</span>
+                        <span className={`text-[10px] font-semibold ${b.status.includes('Critical') ? 'text-red-600' : 'text-slate-500'}`}>
+                          {b.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
+
+          {/* National Facility Distribution (Total: 39,437) */}
+          <FacilityDistributionSection />
         </div>
       )}
 

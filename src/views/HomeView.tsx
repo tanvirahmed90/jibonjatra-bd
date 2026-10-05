@@ -7,6 +7,7 @@ import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
 import { BANGLADESH_EMERGENCY_HOTLINES } from '../data/mockData';
+import { FacilityDistributionSection } from '../components/FacilityDistributionSection';
 import { ArrowRight, Phone, ShieldCheck } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
@@ -283,7 +284,10 @@ export const HomeView: React.FC = () => {
         <Map />
       </section>
 
-      {/* 5. NEARBY HOSPITALS SECTION */}
+      {/* 5. NATIONWIDE FACILITY DISTRIBUTION (39,437) */}
+      <FacilityDistributionSection />
+
+      {/* 6. NEARBY HOSPITALS SECTION */}
       <section className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>

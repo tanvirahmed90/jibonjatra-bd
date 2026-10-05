@@ -4,8 +4,9 @@ import { HospitalCard } from '../components/HospitalCard';
 import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { Map } from '../components/Map';
-import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink } from 'lucide-react';
+import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink, Layers } from 'lucide-react';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
+import { TOTAL_FACILITIES_COUNT, DIVISION_WISE_DISTRIBUTION } from '../data/facilityStats';
 
 export const HospitalsView: React.FC = () => {
   const { hospitals, setSelectedHospital, userLocation } = useApp();
@@ -110,6 +111,51 @@ export const HospitalsView: React.FC = () => {
             <MapIcon className="w-3.5 h-3.5" />
             <span>Interactive Map</span>
           </button>
+        </div>
+      </div>
+
+      {/* 39,437 National Facilities Division Quick Filters */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-card-soft space-y-2.5">
+        <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
+          <div className="flex items-center gap-1.5 font-bold text-slate-900">
+            <Layers className="w-4 h-4 text-red-600" />
+            <span>Division-Wise Facility Distribution (Total: {TOTAL_FACILITIES_COUNT.toLocaleString()})</span>
+          </div>
+          <span className="text-[11px] text-slate-500 hidden sm:inline">Click any division to filter facilities</span>
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs">
+          <button
+            type="button"
+            onClick={() => setFilters(prev => ({ ...prev, division: 'All Divisions' }))}
+            className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+              filters.division === 'All Divisions'
+                ? 'bg-slate-900 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            All ({TOTAL_FACILITIES_COUNT.toLocaleString()})
+          </button>
+
+          {DIVISION_WISE_DISTRIBUTION.map((item) => (
+            <button
+              key={item.division}
+              type="button"
+              onClick={() => setFilters(prev => ({ ...prev, division: item.division }))}
+              className={`px-3 py-1.5 rounded-xl font-semibold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                filters.division === item.division
+                  ? 'bg-red-600 text-white font-bold shadow-sm'
+                  : 'bg-slate-50 border border-slate-200 text-slate-700 hover:bg-red-50'
+              }`}
+            >
+              <span>{item.division}</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                filters.division === item.division ? 'bg-white text-red-600' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {item.count.toLocaleString()}
+              </span>
+            </button>
+          ))}
         </div>
       </div>
 
