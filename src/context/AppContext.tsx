@@ -51,8 +51,18 @@ const DEFAULT_LOCATION: UserLocation = {
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   // Load or initialize state with localStorage backup
   const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals') || localStorage.getItem('medirescue_hospitals');
-    return saved ? JSON.parse(saved) : INITIAL_HOSPITALS;
+    const saved = localStorage.getItem('jibonjatra_hospitals_v3');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_HOSPITALS.length) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_HOSPITALS;
   });
 
   const [donors, setDonors] = useState<BloodDonor[]>(() => {
@@ -85,7 +95,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals', JSON.stringify(hospitals));
+    localStorage.setItem('jibonjatra_hospitals_v3', JSON.stringify(hospitals));
   }, [hospitals]);
 
   useEffect(() => {
