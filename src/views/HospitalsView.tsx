@@ -77,7 +77,7 @@ export const HospitalsView: React.FC = () => {
             <span className="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-0.5 rounded">
               Verified Healthcare Facilities
             </span>
-            <span className="text-xs text-slate-500">DGHS / MOHFW Registry</span>
+            <span className="text-xs text-slate-500">24/7 Verified Healthcare Network</span>
           </div>
           <h1 className="font-display font-black text-2xl sm:text-4xl text-slate-900">
             Emergency Hospitals & Trauma Centers
@@ -121,7 +121,7 @@ export const HospitalsView: React.FC = () => {
         <SearchBar
           query={searchQuery}
           onQueryChange={setSearchQuery}
-          placeholder="Search by hospital name (DMCH, Square, BSMMU...), area, or MOHFW code..."
+          placeholder="Search by hospital name (DMCH, Square, BSMMU...), area, or hospital code..."
           onToggleFilters={() => setShowFilters(!showFilters)}
           filterCount={
             (filters.emergencyOnly ? 1 : 0) +

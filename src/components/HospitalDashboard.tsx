@@ -66,7 +66,7 @@ export const HospitalDashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-xs px-2.5 py-0.5 rounded-full font-bold">
-              Staff Portal • MOHFW Registry #{affiliatedHospital.code}
+              Staff Portal • Hospital Facility Code #{affiliatedHospital.code}
             </span>
             <span className="text-xs text-slate-300">Duty Officer: {currentUser.name}</span>
           </div>

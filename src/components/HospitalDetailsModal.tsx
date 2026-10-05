@@ -58,7 +58,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
             {hospital.mohfwVerified && (
               <span className="bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                DGHS / MOHFW Code #{hospital.code}
+                Verified Facility Code #{hospital.code}
               </span>
             )}
           </div>
@@ -220,7 +220,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
           {/* Hospital Notes / Trauma Level */}
           {hospital.notes && (
             <div className="bg-blue-50/60 border border-blue-100 rounded-2xl p-4 text-xs text-slate-700">
-              <span className="font-bold text-blue-900 block mb-1">MOHFW Registry Institutional Notes:</span>
+              <span className="font-bold text-blue-900 block mb-1">Hospital Clinical Overview & Notes:</span>
               <p>{hospital.notes}</p>
             </div>
           )}

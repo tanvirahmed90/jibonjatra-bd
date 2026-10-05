@@ -89,7 +89,7 @@ export const DonorRegisterModal: React.FC<DonorRegisterModalProps> = ({ isOpen, 
               Registration Received!
             </h4>
             <p className="text-xs text-slate-600 max-w-xs mx-auto">
-              Thank you for volunteering to save lives in Bangladesh. Your profile is queued for DGHS / Red Crescent verification.
+              Thank you for volunteering to save lives in Bangladesh. Your profile is queued for JibonJatra emergency verification.
             </p>
           </div>
         ) : (

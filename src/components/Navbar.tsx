@@ -38,7 +38,7 @@ export const Navbar: React.FC = () => {
       case 'donor':
         return { label: 'Blood Donor', color: 'bg-rose-100 text-rose-800' };
       case 'admin':
-        return { label: 'DGHS Admin', color: 'bg-purple-100 text-purple-800' };
+        return { label: 'System Admin', color: 'bg-purple-100 text-purple-800' };
       default:
         return { label: 'Citizen', color: 'bg-blue-100 text-blue-800' };
     }

@@ -112,23 +112,14 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Col 4: MOHFW Alignment & Safety Disclaimer */}
+          {/* Col 4: Emergency Standards & Safety */}
           <div className="space-y-3">
             <h4 className="font-display font-bold text-sm text-white uppercase tracking-wider">
-              MOHFW Facility Registry
+              Emergency Standards
             </h4>
             <p className="text-xs text-slate-400 leading-relaxed">
-              Hospital database aligned with the Directorate General of Health Services (DGHS) Facility Registry of Bangladesh.
+              Standardized hospital directory providing 24/7 emergency casualty status, ICU availability, and trauma services across Bangladesh.
             </p>
-            <a
-              href="https://hris.mohfw.gov.bd/public/facility-registry/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 font-semibold"
-            >
-              <span>Visit hris.mohfw.gov.bd</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
             <div className="pt-1">
               <span className="text-[10px] text-slate-500 block">
                 Safety Rule: JibonJatra BD does not falsely claim unverified real-time bed data. Facilities display verified 'Last updated' timestamps.

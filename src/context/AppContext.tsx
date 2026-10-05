@@ -226,7 +226,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       setDonors(prev => prev.map(d => d.id === id ? { ...d, verified: true } : d));
     } else if (type === 'ambulance') {
       // mark verified
-      alert(`Ambulance service ${id} verified by DGHS Admin!`);
+      alert(`Ambulance service ${id} verified by System Admin!`);
     }
   };
 

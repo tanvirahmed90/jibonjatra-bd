@@ -32,9 +32,9 @@ export const AdminDashboard: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-2">
             <span className="bg-red-500/20 text-red-300 border border-red-400/30 text-xs px-2.5 py-0.5 rounded-full font-bold">
-              Directorate General of Health Services (DGHS)
+              Emergency Operations Center
             </span>
-            <span className="text-xs text-slate-400">MOHFW Facility Registry Oversight</span>
+            <span className="text-xs text-slate-400">National Healthcare Network Oversight</span>
           </div>
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white">
             JibonJatra BD National Command Dashboard
@@ -81,7 +81,7 @@ export const AdminDashboard: React.FC = () => {
       {/* 6 Top Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-card-soft">
-          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">MOHFW Hospitals</span>
+          <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">Registered Hospitals</span>
           <span className="text-2xl font-black font-display text-slate-900 mt-1 block">{totalHospitals}</span>
           <span className="text-[11px] text-emerald-600 font-semibold">{verifiedHospitals} Verified</span>
         </div>
@@ -131,7 +131,7 @@ export const AdminDashboard: React.FC = () => {
                 <h3 className="font-display font-bold text-lg text-slate-900">
                   Regional Emergency Bed Capacity & Availability
                 </h3>
-                <p className="text-xs text-slate-500">Connected with DGHS Facility Registry</p>
+                <p className="text-xs text-slate-500">Comprehensive Regional Emergency Bed Overview</p>
               </div>
               <span className="text-xs font-semibold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full">
                 Division Breakdown
@@ -164,21 +164,15 @@ export const AdminDashboard: React.FC = () => {
               ))}
             </div>
 
-            {/* MOHFW Registry Notice */}
+            {/* Directory Notice */}
             <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 flex items-center justify-between text-xs text-slate-600">
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Synchronized with <strong>https://hris.mohfw.gov.bd/public/facility-registry/</strong></span>
+                <span>Verified Bangladesh Healthcare Facility Database</span>
               </span>
-              <a
-                href="https://hris.mohfw.gov.bd/public/facility-registry/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 hover:text-blue-700 font-bold flex items-center gap-1"
-              >
-                <span>DGHS Portal</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
+              <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 font-bold px-2.5 py-0.5 rounded-full text-[11px]">
+                ● Live Directory
+              </span>
             </div>
           </div>
 

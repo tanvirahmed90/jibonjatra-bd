@@ -39,7 +39,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose }) => {
     { role: 'donor' as UserRole, label: 'Blood Donor', icon: Droplet, desc: 'Volunteer & save lives' },
     { role: 'hospital' as UserRole, label: 'Hospital Staff', icon: Building2, desc: 'Manage ICU & casualty status' },
     { role: 'ambulance' as UserRole, label: 'Ambulance Driver', icon: Truck, desc: 'Update trip & vehicle status' },
-    { role: 'admin' as UserRole, label: 'DGHS Admin', icon: Shield, desc: 'Verify registry & oversee incidents' },
+    { role: 'admin' as UserRole, label: 'System Admin', icon: Shield, desc: 'Verify registry & oversee incidents' },
   ];
 
   return (

@@ -7,8 +7,7 @@ import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
 import { BANGLADESH_EMERGENCY_HOTLINES } from '../data/mockData';
-import { ArrowRight, Phone, ExternalLink, ShieldCheck, MapPin, Sparkles } from 'lucide-react';
-import { Hospital } from '../types';
+import { ArrowRight, Phone, ShieldCheck } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
   const {
@@ -190,7 +189,7 @@ export const HomeView: React.FC = () => {
                 Find Nearby Hospitals
               </p>
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                MOHFW-registered teaching colleges, specialized apex centers & private tertiary hospitals.
+                Leading medical college hospitals, specialized trauma centers & private tertiary healthcare.
               </p>
             </div>
             <div className="pt-4 flex items-center gap-1.5 text-xs font-bold text-blue-600 group-hover:translate-x-1 transition-transform">
@@ -371,36 +370,35 @@ export const HomeView: React.FC = () => {
         )}
       </section>
 
-      {/* 6. MOHFW DATABASE ATTRIBUTION SECTION */}
+      {/* 6. 24/7 EMERGENCY NETWORK TRUST SECTION */}
       <section className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/90 shadow-card-soft">
         <div className="flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-center flex-shrink-0 text-emerald-700">
+            <div className="w-14 h-14 rounded-2xl bg-red-50 border border-red-200 flex items-center justify-center flex-shrink-0 text-red-600">
               <ShieldCheck className="w-8 h-8" />
             </div>
             <div>
-              <span className="text-xs font-bold text-emerald-800 uppercase tracking-wider block">
-                Official Data Alignment
+              <span className="text-xs font-bold text-red-700 uppercase tracking-wider block">
+                24/7 Emergency Healthcare Network
               </span>
               <h3 className="font-display font-bold text-lg text-slate-900">
-                Government of People's Republic of Bangladesh
+                Verified Hospitals, Emergency Blood & Ambulance Fleet
               </h3>
               <p className="text-xs text-slate-600 mt-0.5">
-                Directorate General of Health Services (DGHS) • Ministry of Health & Family Welfare
+                Connecting patients to critical care and lifesaving facilities across all divisions in Bangladesh.
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3 w-full md:w-auto">
-            <a
-              href="https://hris.mohfw.gov.bd/public/facility-registry/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all text-center"
+            <button
+              type="button"
+              onClick={() => setActiveTab('hospitals')}
+              className="w-full md:w-auto inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition-all text-center"
             >
-              <span>DGHS Facility Registry Portal</span>
-              <ExternalLink className="w-3.5 h-3.5" />
-            </a>
+              <span>Explore All Hospitals</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
           </div>
         </div>
       </section>

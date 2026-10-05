@@ -32,11 +32,11 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
           <span>{formatDistance(hospital.distanceKm)}</span>
         </div>
 
-        {/* MOHFW Verified Badge */}
+        {/* Verified Facility Badge */}
         {hospital.mohfwVerified && (
-          <div className="absolute top-3 right-3 bg-emerald-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1" title="Verified in Bangladesh MOHFW Facility Registry">
+          <div className="absolute top-3 right-3 bg-emerald-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1" title="Verified Emergency Hospital Facility">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-            <span>MOHFW Verified</span>
+            <span>Verified Facility</span>
           </div>
         )}
 

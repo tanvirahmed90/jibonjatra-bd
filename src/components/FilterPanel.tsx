@@ -156,7 +156,7 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-slate-100">
         <div>
           <label className="block text-xs font-semibold text-slate-700 mb-1">
-            Division (MOHFW Registry)
+            Division
           </label>
           <select
             value={filters.division}

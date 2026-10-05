@@ -2,7 +2,7 @@ import { Hospital, BloodDonor, Ambulance, User } from '../types';
 
 export const BANGLADESH_EMERGENCY_HOTLINES = [
   { number: '999', title: 'National Emergency Service', desc: 'Police, Fire Service, Govt Ambulance Dispatch', color: 'bg-red-600', icon: 'AlertTriangle' },
-  { number: '16263', title: 'Shastho Batayan (স্বাস্থ্য বাতায়ন)', desc: 'DGHS 24/7 Free Doctor & Healthcare Advice', color: 'bg-blue-600', icon: 'PhoneCall' },
+  { number: '16263', title: 'Shastho Batayan (স্বাস্থ্য বাতায়ন)', desc: '24/7 National Health Advice Hotline', color: 'bg-blue-600', icon: 'PhoneCall' },
   { number: '333', title: 'National Help Desk', desc: 'Government Services & Emergency Relief', color: 'bg-emerald-600', icon: 'Shield' },
   { number: '10655', title: 'IEDCR Epidemic Helpline', desc: 'Institute of Epidemiology, Disease Control & Research', color: 'bg-purple-600', icon: 'Activity' },
 ];
@@ -47,7 +47,7 @@ export const INITIAL_HOSPITALS: Hospital[] = [
       emergencyAvailable: 18,
       generalAvailable: 45
     },
-    lastUpdated: '12 mins ago (MOHFW Synced)',
+    lastUpdated: '12 mins ago (Verified)',
     verified: true,
     mohfwVerified: true,
     notes: 'Largest public tertiary hospital in Bangladesh with Level-1 24/7 Trauma Center and Burn Institute facility.'
@@ -819,8 +819,8 @@ export const INITIAL_USERS: User[] = [
   },
   {
     id: 'user-admin',
-    name: 'Director (Hospital & Clinics, DGHS)',
-    email: 'admin@dghs.gov.bd',
+    name: 'Central Operations Director, JibonJatra BD',
+    email: 'admin@jibonjatra.bd',
     phone: '+880 2 55165000',
     role: 'admin',
     avatar: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&q=80&w=200'
