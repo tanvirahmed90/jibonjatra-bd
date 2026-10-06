@@ -1,5 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import '@maplibre/maplibre-gl-leaflet';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '../context/AppContext';
 import { Hospital, BloodDonor, Ambulance } from '../types';
 import { Navigation, Layers, ShieldCheck, Phone, ExternalLink } from 'lucide-react';
@@ -20,8 +22,9 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
   const [showHospitals, setShowHospitals] = useState(true);
   const [showAmbulances, setShowAmbulances] = useState(true);
   const [showDonors, setShowDonors] = useState(true);
+  const [isLocating, setIsLocating] = useState(false);
 
-  // Initialize Leaflet Map
+  // Initialize Leaflet Map with OpenFreeMap Liberty style
   useEffect(() => {
     if (!mapContainerRef.current) return;
 
@@ -32,20 +35,39 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         zoomControl: true,
       });
 
-      // CartoDB Positron / OSM tiles for crisp, clean healthcare look
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
-        maxZoom: 19,
-      }).addTo(map);
+      // Free map API: OpenFreeMap Liberty style (no API key required)
+      try {
+        L.maplibreGL({
+          style: 'https://tiles.openfreemap.org/styles/liberty',
+        }).addTo(map);
+      } catch (err) {
+        console.warn('MapLibre GL failed, falling back to OSM raster tiles:', err);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19,
+        }).addTo(map);
+      }
 
       markersLayerRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
     }
 
     return () => {
-      // cleanup handled gracefully
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
     };
   }, []);
+
+  // Smooth flyTo whenever userLocation changes (GPS or selected area)
+  useEffect(() => {
+    if (mapInstanceRef.current && userLocation.lat && userLocation.lng) {
+      mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 13.5, {
+        duration: 1.2,
+      });
+    }
+  }, [userLocation.lat, userLocation.lng]);
 
   // Update map center if hospital is specifically selected
   useEffect(() => {
@@ -56,7 +78,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     }
   }, [centerOnHospital]);
 
-  // Render Markers
+  // Render Markers & Nearby Radius
   useEffect(() => {
     const map = mapInstanceRef.current;
     const layer = markersLayerRef.current;
@@ -64,62 +86,86 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
     layer.clearLayers();
 
-    // 1. User Location Marker
+    // 1. User Location Marker + 5km Nearby Radius Circle
     const userIcon = L.divIcon({
       className: 'custom-user-marker',
       html: `
-        <div style="position: relative; width: 24px; height: 24px;">
-          <div style="position: absolute; width: 24px; height: 24px; background: rgba(25, 118, 210, 0.3); border-radius: 50%; animation: pulse-ring 2s infinite;"></div>
-          <div style="position: absolute; top: 4px; left: 4px; width: 16px; height: 16px; background: #1976D2; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>
+        <div style="position: relative; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center;">
+          <div style="position: absolute; width: 28px; height: 28px; background: rgba(37, 99, 235, 0.25); border-radius: 50%; animation: pulse-ring 2s infinite;"></div>
+          <div style="width: 14px; height: 14px; background: #2563EB; border: 3px solid white; border-radius: 50%; box-shadow: 0 2px 6px rgba(0,0,0,0.4);"></div>
         </div>
       `,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
+      iconSize: [28, 28],
+      iconAnchor: [14, 14],
     });
 
-    const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon })
+    const userMarker = L.marker([userLocation.lat, userLocation.lng], { icon: userIcon, zIndexOffset: 1000 })
       .bindPopup(`
-        <div style="font-family: system-ui; padding: 4px;">
-          <div style="font-weight: bold; color: #1976D2; font-size: 13px;">📍 Your Detected Location</div>
-          <div style="font-size: 11px; color: #475569; margin-top: 2px;">${userLocation.address}</div>
+        <div style="font-family: system-ui; padding: 6px; min-width: 190px;">
+          <div style="font-weight: 800; color: #1D4ED8; font-size: 13px; display: flex; items-center; gap: 4px;">
+            <span>📍 Your Location</span>
+            ${userLocation.isLive ? '<span style="background: #DCFCE7; color: #15803D; font-size: 9px; padding: 1px 5px; border-radius: 999px; font-weight: 700;">LIVE GPS</span>' : ''}
+          </div>
+          <div style="font-size: 11px; color: #334155; margin-top: 4px; font-weight: 500;">${userLocation.address}</div>
+          <div style="font-size: 10px; color: #64748B; margin-top: 3px;">Showing nearby hospitals within immediate radius.</div>
         </div>
       `);
     layer.addLayer(userMarker);
 
+    // 5 km Nearby emergency zone visual circle
+    const nearbyCircle = L.circle([userLocation.lat, userLocation.lng], {
+      radius: 5000,
+      color: '#2563EB',
+      fillColor: '#3B82F6',
+      fillOpacity: 0.05,
+      weight: 1.5,
+      dashArray: '4, 6',
+    }).bindTooltip('📍 5 km Emergency Coverage Zone', { direction: 'top', sticky: true });
+    layer.addLayer(nearbyCircle);
+
     // 2. Hospitals Markers (Red Emergency Cross)
     if (showHospitals) {
       hospitals.forEach(hosp => {
+        const isNearby = hosp.distanceKm <= 5;
         const hospIcon = L.divIcon({
           className: 'custom-hosp-marker',
           html: `
-            <div style="background: #D32F2F; color: white; width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 18px; border: 2px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.35); cursor: pointer;">
-              ✚
+            <div style="position: relative;">
+              <div style="background: ${isNearby ? '#DC2626' : '#EF4444'}; color: white; width: ${isNearby ? '34px' : '30px'}; height: ${isNearby ? '34px' : '30px'}; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: ${isNearby ? '18px' : '16px'}; border: 2.5px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.35); cursor: pointer; transition: transform 0.2s;">
+                ✚
+              </div>
+              ${isNearby ? '<span style="position: absolute; -top: 6px; -right: 6px; background: #16A34A; color: white; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 999px; border: 1.5px solid white;">NEAR</span>' : ''}
             </div>
           `,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
-          popupAnchor: [0, -16],
+          iconSize: [34, 34],
+          iconAnchor: [17, 17],
+          popupAnchor: [0, -17],
         });
 
         const popupContent = `
-          <div style="min-width: 210px; font-family: system-ui; padding: 4px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px;">
-              <span style="font-size: 10px; background: #FFEBEE; color: #C62828; padding: 2px 6px; border-radius: 4px; font-weight: bold;">
+          <div style="min-width: 230px; font-family: system-ui; padding: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
+              <span style="font-size: 10px; background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
                 ${hosp.type}
               </span>
-              <span style="font-size: 10px; color: #64748B; font-weight: bold;">${formatDistance(hosp.distanceKm)}</span>
+              <span style="font-size: 11px; color: ${isNearby ? '#15803D' : '#475569'}; font-weight: 800;">
+                ${isNearby ? '🟢 ' : ''}${formatDistance(hosp.distanceKm)}
+              </span>
             </div>
-            <h4 style="margin: 6px 0 2px; font-size: 14px; font-weight: bold; color: #0F172A;">${hosp.name}</h4>
-            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">${hosp.address}</div>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px; background: #F8FAFC; padding: 6px; border-radius: 6px; margin-bottom: 8px;">
-              <div>Emergency: <strong>${hosp.facilities.emergency === 'available' ? '🟢 Available' : '🟡 Limited'}</strong></div>
-              <div>ICU: <strong>${hosp.facilities.icu === 'available' ? '🟢 Yes' : hosp.facilities.icu === 'limited' ? '🟡 Limited' : '🔴 Full'}</strong></div>
+            <h4 style="margin: 4px 0 2px; font-size: 14px; font-weight: 800; color: #0F172A; line-height: 1.2;">${hosp.name}</h4>
+            ${hosp.banglaName ? `<div style="font-size: 11px; color: #64748B; margin-bottom: 3px;">${hosp.banglaName}</div>` : ''}
+            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${hosp.address}</div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px; background: #F8FAFC; padding: 6px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #E2E8F0;">
+              <div>Emergency: <strong>${hosp.facilities.emergency === 'available' ? '🟢 24/7' : '🟡 Limited'}</strong></div>
+              <div>ICU: <strong>${hosp.facilities.icu === 'available' ? '🟢 Available' : hosp.facilities.icu === 'limited' ? '🟡 Limited' : '🔴 Full'}</strong></div>
             </div>
+
             <div style="display: flex; gap: 6px;">
-              <a href="tel:${hosp.emergencyHotline}" style="flex: 1; background: #D32F2F; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+              <a href="tel:${hosp.emergencyHotline}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
                 📞 Call Hotline
               </a>
-              <a href="https://www.google.com/maps/dir/?api=1&destination=${hosp.lat},${hosp.lng}" target="_blank" style="flex: 1; background: #E2E8F0; color: #1E293B; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
+              <a href="https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hosp.lat},${hosp.lng}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
                 🗺️ Directions
               </a>
             </div>
@@ -139,7 +185,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         const ambIcon = L.divIcon({
           className: 'custom-amb-marker',
           html: `
-            <div style="background: ${amb.status === 'available' ? '#2E7D32' : '#F57C00'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
+            <div style="background: ${amb.status === 'available' ? '#16A34A' : '#EA580C'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
               🚑
             </div>
           `,
@@ -155,7 +201,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             </div>
             <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${amb.providerName}</h4>
             <div style="font-size: 11px; color: #64748B;">${amb.vehicleType} • ${formatDistance(amb.distanceKm)}</div>
-            <a href="tel:${amb.phone}" style="display: block; margin-top: 6px; background: #D32F2F; color: white; text-align: center; padding: 5px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+            <a href="tel:${amb.phone}" style="display: block; margin-top: 6px; background: #DC2626; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
               📞 Call Ambulance (${amb.phone})
             </a>
           </div>
@@ -204,73 +250,118 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     }
   }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors]);
 
-  const recenterMapToUser = () => {
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 14, { duration: 1 });
+  const { requestGeolocation, setUserCustomLocation } = useApp();
+
+  const handleMyLocationClick = async () => {
+    setIsLocating(true);
+    try {
+      await requestGeolocation();
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 14, { duration: 1 });
+      }
+    } finally {
+      setIsLocating(false);
     }
   };
 
+  const nearbyHospitalsCount = hospitals.filter(h => h.distanceKm <= 5).length;
+
   return (
-    <div className="relative rounded-2xl overflow-hidden border border-slate-200/80 shadow-card-soft bg-slate-100">
-      {/* Map Header / Layer Controls */}
-      <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur-md px-3 py-2 rounded-xl shadow-md border border-slate-200 flex items-center gap-3 text-xs flex-wrap max-w-[90%]">
-        <div className="flex items-center gap-1.5 font-bold text-slate-800">
-          <Layers className="w-3.5 h-3.5 text-blue-600" />
-          <span>Map Layers:</span>
+    <div className="relative rounded-2xl overflow-hidden border border-slate-200/90 shadow-card-soft bg-slate-100">
+      {/* Top Map Bar: Layer Controls & Quick Areas */}
+      <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-wrap items-center justify-between gap-2 pointer-events-none">
+        {/* Layer Toggles */}
+        <div className="pointer-events-auto bg-white/95 backdrop-blur-md px-3 py-2 rounded-xl shadow-md border border-slate-200 flex items-center gap-3 text-xs flex-wrap max-w-full">
+          <div className="flex items-center gap-1.5 font-bold text-slate-800">
+            <Layers className="w-3.5 h-3.5 text-blue-600" />
+            <span className="hidden sm:inline">Layers:</span>
+          </div>
+
+          <label className="flex items-center gap-1.5 cursor-pointer hover:text-red-700">
+            <input
+              type="checkbox"
+              checked={showHospitals}
+              onChange={(e) => setShowHospitals(e.target.checked)}
+              className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
+            />
+            <span className="flex items-center gap-1 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-red-600"></span>
+              Hospitals ({hospitals.length})
+            </span>
+          </label>
+
+          <label className="flex items-center gap-1.5 cursor-pointer hover:text-emerald-700">
+            <input
+              type="checkbox"
+              checked={showAmbulances}
+              onChange={(e) => setShowAmbulances(e.target.checked)}
+              className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
+            />
+            <span className="flex items-center gap-1 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
+              Ambulances ({ambulances.filter(a => a.status === 'available').length})
+            </span>
+          </label>
+
+          <label className="flex items-center gap-1.5 cursor-pointer hover:text-rose-700">
+            <input
+              type="checkbox"
+              checked={showDonors}
+              onChange={(e) => setShowDonors(e.target.checked)}
+              className="rounded text-rose-600 focus:ring-rose-500 w-3.5 h-3.5"
+            />
+            <span className="flex items-center gap-1 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-rose-600"></span>
+              Donors ({donors.filter(d => d.available).length})
+            </span>
+          </label>
         </div>
 
-        <label className="flex items-center gap-1.5 cursor-pointer hover:text-red-700">
-          <input
-            type="checkbox"
-            checked={showHospitals}
-            onChange={(e) => setShowHospitals(e.target.checked)}
-            className="rounded text-red-600 focus:ring-red-500 w-3.5 h-3.5"
-          />
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-red-600"></span>
-            Hospitals ({hospitals.length})
-          </span>
-        </label>
-
-        <label className="flex items-center gap-1.5 cursor-pointer hover:text-emerald-700">
-          <input
-            type="checkbox"
-            checked={showAmbulances}
-            onChange={(e) => setShowAmbulances(e.target.checked)}
-            className="rounded text-emerald-600 focus:ring-emerald-500 w-3.5 h-3.5"
-          />
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-            Ambulances ({ambulances.filter(a => a.status === 'available').length})
-          </span>
-        </label>
-
-        <label className="flex items-center gap-1.5 cursor-pointer hover:text-rose-700">
-          <input
-            type="checkbox"
-            checked={showDonors}
-            onChange={(e) => setShowDonors(e.target.checked)}
-            className="rounded text-rose-600 focus:ring-rose-500 w-3.5 h-3.5"
-          />
-          <span className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-rose-600"></span>
-            Blood Donors ({donors.filter(d => d.available).length})
-          </span>
-        </label>
+        {/* Nearby hospitals counter indicator badge */}
+        <div className="pointer-events-auto bg-slate-900/90 text-white backdrop-blur-md px-3 py-1.5 rounded-xl shadow-md border border-slate-700 flex items-center gap-2 text-xs font-semibold">
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+          <span>{nearbyHospitalsCount} hospitals within 5 km</span>
+        </div>
       </div>
 
-      {/* Recenter Button */}
-      <button
-        type="button"
-        onClick={recenterMapToUser}
-        className="absolute bottom-4 right-4 z-[1000] bg-white text-slate-800 p-2.5 rounded-xl shadow-lg border border-slate-200 hover:bg-slate-50 active:scale-95 transition-all flex items-center gap-1.5 text-xs font-semibold"
-        title="Recenter to my detected location"
-      >
-        <Navigation className="w-4 h-4 text-blue-600 fill-blue-600" />
-        <span className="hidden sm:inline">My Location</span>
-      </button>
+      {/* Bottom Area Switcher & Location Button */}
+      <div className="absolute bottom-3 left-3 right-3 z-[1000] flex items-center justify-between gap-2 pointer-events-none">
+        {/* Quick Area Location Selector */}
+        <div className="pointer-events-auto hidden md:flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-200 text-xs">
+          <span className="text-[11px] font-bold text-slate-500 px-1">Quick Area:</span>
+          {[
+            { name: 'Rampura', lat: 23.7610, lng: 90.4208, label: 'Rampura (রামপুরা)' },
+            { name: 'Banasree', lat: 23.7635, lng: 90.4308, label: 'Banasree' },
+            { name: 'Panthapath', lat: 23.7525, lng: 90.3840, label: 'Panthapath' },
+            { name: 'Dhanmondi', lat: 23.7461, lng: 90.3742, label: 'Dhanmondi' },
+            { name: 'Mirpur', lat: 23.8067, lng: 90.3683, label: 'Mirpur' },
+            { name: 'Uttara', lat: 23.8728, lng: 90.3984, label: 'Uttara' },
+          ].map((area) => (
+            <button
+              key={area.name}
+              type="button"
+              onClick={() => setUserCustomLocation(area.lat, area.lng, `${area.name}, Dhaka`)}
+              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold text-[11px] transition-all"
+            >
+              {area.name}
+            </button>
+          ))}
+        </div>
 
-      {/* Actual Leaflet Container */}
+        {/* Live GPS Recenter Button */}
+        <button
+          type="button"
+          onClick={handleMyLocationClick}
+          disabled={isLocating}
+          className="pointer-events-auto ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-2 text-xs font-bold"
+          title="Detect my current location with GPS"
+        >
+          <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
+          <span>{isLocating ? 'Detecting GPS...' : 'My Live Location'}</span>
+        </button>
+      </div>
+
+      {/* Actual Leaflet Container with OpenFreeMap */}
       <div ref={mapContainerRef} className={`w-full ${height} z-0`} />
     </div>
   );

@@ -49,6 +49,7 @@ export interface Hospital {
   verified: boolean;
   mohfwVerified: boolean;
   notes?: string;
+  areaTags?: string[];
 }
 
 export interface BloodDonor {

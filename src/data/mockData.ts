@@ -14,6 +14,44 @@ export const INITIAL_HOSPITALS: Hospital[] = COMPREHENSIVE_BANGLADESH_HOSPITALS;
 
 export const INITIAL_BLOOD_DONORS: BloodDonor[] = [
   {
+    id: 'donor-rampura-1',
+    name: 'Mustafizur Rahman',
+    bloodGroup: 'O+',
+    phone: '+880 1718 901234',
+    division: 'Dhaka',
+    district: 'Dhaka',
+    area: 'Rampura / Banasree',
+    lat: 23.7615,
+    lng: 90.4215,
+    distanceKm: 3.5,
+    available: true,
+    emergencyEligible: true,
+    lastActive: '3 mins ago',
+    lastDonationDate: '2026-04-10',
+    donationCount: 9,
+    verified: true,
+    contactPreference: 'both'
+  },
+  {
+    id: 'donor-rampura-2',
+    name: 'Shamim Hossain',
+    bloodGroup: 'B+',
+    phone: '+880 1819 123456',
+    division: 'Dhaka',
+    district: 'Dhaka',
+    area: 'East Rampura (DIT Road)',
+    lat: 23.7595,
+    lng: 90.4190,
+    distanceKm: 3.4,
+    available: true,
+    emergencyEligible: true,
+    lastActive: 'Just now',
+    lastDonationDate: '2026-03-25',
+    donationCount: 14,
+    verified: true,
+    contactPreference: 'both'
+  },
+  {
     id: 'donor-1',
     name: 'Tanvir Ahmed',
     bloodGroup: 'O+',
@@ -168,6 +206,23 @@ export const INITIAL_BLOOD_DONORS: BloodDonor[] = [
 ];
 
 export const INITIAL_AMBULANCES: Ambulance[] = [
+  {
+    id: 'amb-105-rampura',
+    providerName: 'Rampura Emergency Fast Dispatch #105',
+    driverName: 'Alamgir Hossain',
+    phone: '+880 1712 884422',
+    vehicleType: 'ICU Ambulance',
+    regNumber: 'Dhaka Metro Cha-72-9104',
+    lat: 23.7610,
+    lng: 90.4205,
+    distanceKm: 3.5,
+    etaMinutes: 5,
+    status: 'available',
+    hospitalAffiliation: 'Better Life Hospital Standby',
+    fareEstimate: '৳ 2,000 - 3,000 (Full ICU & Paramedic)',
+    features: ['Ventilator', 'Cardiac Monitor', 'Portable Oxygen', 'Emergency Stretcher'],
+    lastUpdated: 'Just now'
+  },
   {
     id: 'amb-101',
     providerName: 'Red Crescent Emergency Dispatch #101',

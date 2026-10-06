@@ -48,10 +48,35 @@ const DEFAULT_LOCATION: UserLocation = {
   isLive: false,
 };
 
+async function reverseGeocode(lat: number, lng: number): Promise<string> {
+  try {
+    const res = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=16&addressdetails=1`,
+      { signal: AbortSignal.timeout(3500) }
+    );
+    if (res.ok) {
+      const data = await res.json();
+      const addr = data.address || {};
+      const area = addr.suburb || addr.neighbourhood || addr.quarter || addr.residential || addr.road;
+      const city = addr.city || addr.town || addr.district || addr.county || 'Dhaka';
+      if (area && city) {
+        return `${area}, ${city}`;
+      } else if (area || city) {
+        return (area || city) as string;
+      } else if (data.display_name) {
+        return data.display_name.split(',').slice(0, 2).join(', ');
+      }
+    }
+  } catch {
+    // fallback
+  }
+  return `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+}
+
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load or initialize state with localStorage backup
+  // Load or initialize state with localStorage backup (v4 includes Rampura & expanded hospitals)
   const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals_v3');
+    const saved = localStorage.getItem('jibonjatra_hospitals_v4');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -66,12 +91,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [donors, setDonors] = useState<BloodDonor[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_donors') || localStorage.getItem('medirescue_donors');
+    const saved = localStorage.getItem('jibonjatra_donors_v4');
     return saved ? JSON.parse(saved) : INITIAL_BLOOD_DONORS;
   });
 
   const [ambulances, setAmbulances] = useState<Ambulance[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_ambulances') || localStorage.getItem('medirescue_ambulances');
+    const saved = localStorage.getItem('jibonjatra_ambulances_v4');
     return saved ? JSON.parse(saved) : INITIAL_AMBULANCES;
   });
 
@@ -95,15 +120,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals_v3', JSON.stringify(hospitals));
+    localStorage.setItem('jibonjatra_hospitals_v4', JSON.stringify(hospitals));
   }, [hospitals]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_donors', JSON.stringify(donors));
+    localStorage.setItem('jibonjatra_donors_v4', JSON.stringify(donors));
   }, [donors]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_ambulances', JSON.stringify(ambulances));
+    localStorage.setItem('jibonjatra_ambulances_v4', JSON.stringify(ambulances));
   }, [ambulances]);
 
   useEffect(() => {
@@ -113,6 +138,29 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     localStorage.setItem('jibonjatra_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
+
+  // Automatically detect user GPS location on startup if permitted
+  useEffect(() => {
+    if (typeof navigator !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const address = await reverseGeocode(lat, lng);
+          setUserLocation({
+            lat,
+            lng,
+            address,
+            isLive: true,
+          });
+        },
+        (err) => {
+          console.log('Location detection on start:', err.message);
+        },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 180000 }
+      );
+    }
+  }, []);
 
   // Recalculate distances whenever user location changes
   useEffect(() => {
@@ -152,11 +200,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     return new Promise<void>((resolve) => {
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
+        async (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const address = await reverseGeocode(lat, lng);
           setUserLocation({
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            address: `GPS Location (${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)})`,
+            lat,
+            lng,
+            address,
             isLive: true,
           });
           resolve();
@@ -165,7 +216,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           console.warn('Geolocation access denied or failed, staying on current setting.', err);
           resolve();
         },
-        { enableHighAccuracy: true, timeout: 7000 }
+        { enableHighAccuracy: true, timeout: 8000 }
       );
     });
   };

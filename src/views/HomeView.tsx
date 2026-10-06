@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { EmergencyButton } from '../components/EmergencyButton';
 import { HospitalCard } from '../components/HospitalCard';
@@ -8,6 +8,7 @@ import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
 import { BANGLADESH_EMERGENCY_HOTLINES } from '../data/mockData';
 import { FacilityDistributionSection } from '../components/FacilityDistributionSection';
+import { filterAndRankHospitals } from '../utils/areaSearch';
 import { ArrowRight, Phone, ShieldCheck } from 'lucide-react';
 
 export const HomeView: React.FC = () => {
@@ -17,6 +18,7 @@ export const HomeView: React.FC = () => {
     setIsEmergencyModeOpen,
     setSelectedHospital,
     userLocation,
+    setUserCustomLocation,
   } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,22 +48,14 @@ export const HomeView: React.FC = () => {
     setSearchQuery('');
   };
 
-  // Filter hospitals
-  const filteredHospitals = hospitals.filter((h) => {
-    // Search query matching name, address, upazila, district, or code
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const match =
-        h.name.toLowerCase().includes(q) ||
-        h.address.toLowerCase().includes(q) ||
-        h.upazila.toLowerCase().includes(q) ||
-        h.district.toLowerCase().includes(q) ||
-        h.code.includes(q) ||
-        (h.banglaName && h.banglaName.includes(q));
-      if (!match) return false;
-    }
+  // Intelligent Area & Keyword Search (e.g. Rampura, Banasree, Dhanmondi, Mirpur, DMCH...)
+  const searchResult = useMemo(() => {
+    return filterAndRankHospitals(hospitals, searchQuery, userLocation.lat, userLocation.lng);
+  }, [hospitals, searchQuery, userLocation.lat, userLocation.lng]);
 
-    if (filters.maxDistanceKm < 50 && h.distanceKm > filters.maxDistanceKm) {
+  const filteredHospitals = searchResult.hospitals.filter((h) => {
+    // Only apply maxDistanceKm if user has NOT searched a specific area or keyword
+    if (!searchQuery.trim() && filters.maxDistanceKm < 50 && h.distanceKm > filters.maxDistanceKm) {
       return false;
     }
     if (filters.emergencyOnly && h.facilities.emergency !== 'available') return false;
@@ -75,8 +69,10 @@ export const HomeView: React.FC = () => {
     return true;
   });
 
-  // Sort by distance
-  const sortedHospitals = [...filteredHospitals].sort((a, b) => a.distanceKm - b.distanceKm);
+  // Keep ranked order when searching; sort by distance when browsing
+  const sortedHospitals = searchQuery.trim()
+    ? filteredHospitals
+    : [...filteredHospitals].sort((a, b) => a.distanceKm - b.distanceKm);
 
   return (
     <div className="space-y-10 sm:space-y-14">
@@ -331,6 +327,42 @@ export const HomeView: React.FC = () => {
               onReset={handleResetFilters}
               onClose={() => setShowFilters(false)}
             />
+          )}
+
+          {/* Area Detection Smart Banner */}
+          {searchResult.detectedArea && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200/90 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center font-bold text-base shadow-sm shrink-0">
+                  📍
+                </div>
+                <div>
+                  <div className="font-extrabold text-slate-900 text-sm flex items-center gap-2">
+                    <span>{searchResult.detectedArea.name} ({searchResult.detectedArea.banglaName}) Area Matched</span>
+                    <span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded text-[10px]">
+                      {sortedHospitals.length} Facilities Found
+                    </span>
+                  </div>
+                  <p className="text-slate-600 text-xs mt-0.5">
+                    Showing emergency tertiary hospitals and clinics located in and closest to {searchResult.detectedArea.name}, Dhaka.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setUserCustomLocation(
+                    searchResult.detectedArea!.lat,
+                    searchResult.detectedArea!.lng,
+                    `${searchResult.detectedArea!.name}, Dhaka`
+                  );
+                }}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold transition-all shadow-md flex items-center gap-2 self-start sm:self-auto shrink-0 text-xs"
+              >
+                <span>Center Map at {searchResult.detectedArea.name}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
           )}
         </div>
 
