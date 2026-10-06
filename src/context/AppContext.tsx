@@ -74,9 +74,9 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load or initialize state with localStorage backup (v4 includes Rampura & expanded hospitals)
+  // Load or initialize state with localStorage backup (v5 includes ALL Dhaka areas & comprehensive hospitals)
   const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals_v4');
+    const saved = localStorage.getItem('jibonjatra_hospitals_v5');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -91,12 +91,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [donors, setDonors] = useState<BloodDonor[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_donors_v4');
+    const saved = localStorage.getItem('jibonjatra_donors_v5');
     return saved ? JSON.parse(saved) : INITIAL_BLOOD_DONORS;
   });
 
   const [ambulances, setAmbulances] = useState<Ambulance[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_ambulances_v4');
+    const saved = localStorage.getItem('jibonjatra_ambulances_v5');
     return saved ? JSON.parse(saved) : INITIAL_AMBULANCES;
   });
 
@@ -120,15 +120,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals_v4', JSON.stringify(hospitals));
+    localStorage.setItem('jibonjatra_hospitals_v5', JSON.stringify(hospitals));
   }, [hospitals]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_donors_v4', JSON.stringify(donors));
+    localStorage.setItem('jibonjatra_donors_v5', JSON.stringify(donors));
   }, [donors]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_ambulances_v4', JSON.stringify(ambulances));
+    localStorage.setItem('jibonjatra_ambulances_v5', JSON.stringify(ambulances));
   }, [ambulances]);
 
   useEffect(() => {

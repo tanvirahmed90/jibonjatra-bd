@@ -330,18 +330,23 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         <div className="pointer-events-auto hidden md:flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-200 text-xs">
           <span className="text-[11px] font-bold text-slate-500 px-1">Quick Area:</span>
           {[
-            { name: 'Rampura', lat: 23.7610, lng: 90.4208, label: 'Rampura (রামপুরা)' },
-            { name: 'Banasree', lat: 23.7635, lng: 90.4308, label: 'Banasree' },
-            { name: 'Panthapath', lat: 23.7525, lng: 90.3840, label: 'Panthapath' },
-            { name: 'Dhanmondi', lat: 23.7461, lng: 90.3742, label: 'Dhanmondi' },
-            { name: 'Mirpur', lat: 23.8067, lng: 90.3683, label: 'Mirpur' },
-            { name: 'Uttara', lat: 23.8728, lng: 90.3984, label: 'Uttara' },
+            { name: 'Rampura', lat: 23.7610, lng: 90.4208 },
+            { name: 'Banasree', lat: 23.7635, lng: 90.4308 },
+            { name: 'Dhanmondi', lat: 23.7461, lng: 90.3742 },
+            { name: 'Mirpur', lat: 23.8067, lng: 90.3683 },
+            { name: 'Mohammadpur', lat: 23.7658, lng: 90.3584 },
+            { name: 'Uttara', lat: 23.8728, lng: 90.3984 },
+            { name: 'Gulshan', lat: 23.7925, lng: 90.4180 },
+            { name: 'Badda', lat: 23.7805, lng: 90.4267 },
+            { name: 'Old Dhaka', lat: 23.7085, lng: 90.4260 },
+            { name: 'Jatrabari', lat: 23.7104, lng: 90.4348 },
+            { name: 'Panthapath', lat: 23.7525, lng: 90.3840 },
           ].map((area) => (
             <button
               key={area.name}
               type="button"
               onClick={() => setUserCustomLocation(area.lat, area.lng, `${area.name}, Dhaka`)}
-              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold text-[11px] transition-all"
+              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold text-[11px] transition-all shrink-0"
             >
               {area.name}
             </button>
