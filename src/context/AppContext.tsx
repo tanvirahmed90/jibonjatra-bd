@@ -96,8 +96,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [donors, setDonors] = useState<BloodDonor[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_donors_v5');
-    return saved ? JSON.parse(saved) : INITIAL_BLOOD_DONORS;
+    const saved = localStorage.getItem('jibonjatra_donors_v6');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_BLOOD_DONORS.length) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_BLOOD_DONORS;
   });
 
   const [ambulances, setAmbulances] = useState<Ambulance[]>(() => {
@@ -112,7 +122,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const [currentUser, setCurrentUser] = useState<User>(() => {
     const saved = localStorage.getItem('jibonjatra_current_user') || localStorage.getItem('medirescue_current_user');
-    return saved ? JSON.parse(saved) : INITIAL_USERS[0]; // Ariful Hassan (patient)
+    return saved ? JSON.parse(saved) : INITIAL_USERS[0];
   });
 
   const [userLocation, setUserLocation] = useState<UserLocation>(DEFAULT_LOCATION);
@@ -137,7 +147,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [hospitals]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_donors_v5', JSON.stringify(donors));
+    localStorage.setItem('jibonjatra_donors_v6', JSON.stringify(donors));
   }, [donors]);
 
   useEffect(() => {
