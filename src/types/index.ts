@@ -22,7 +22,15 @@ export interface Hospital {
   name: string;
   banglaName?: string;
   code: string; // MOHFW Registry Code, e.g. 10001024
-  type: 'Govt. Medical College' | 'Specialized Institute' | 'District Hospital' | 'Private Tertiary' | 'Upazila Health Complex';
+  type:
+    | 'Govt. Medical College'
+    | 'Specialized Institute'
+    | 'District Hospital'
+    | 'Private Tertiary'
+    | 'Upazila Health Complex'
+    | 'Union Health Center'
+    | 'Community Health Center'
+    | string;
   division: string;
   district: string;
   upazila: string;

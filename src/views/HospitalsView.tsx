@@ -27,6 +27,13 @@ export const HospitalsView: React.FC = () => {
     facilityType: 'All',
   });
 
+  const [visibleCount, setVisibleCount] = useState(24);
+
+  // Reset pagination when search or filters change
+  React.useEffect(() => {
+    setVisibleCount(24);
+  }, [searchQuery, filters]);
+
   const handleResetFilters = () => {
     setFilters({
       maxDistanceKm: 50,
@@ -247,14 +254,50 @@ export const HospitalsView: React.FC = () => {
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {sortedHospitals.map((hosp) => (
-                <HospitalCard
-                  key={hosp.id}
-                  hospital={hosp}
-                  onViewDetails={setSelectedHospital}
-                />
-              ))}
+            <div className="space-y-6">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-semibold px-1">
+                <span>
+                  Showing <strong className="text-slate-900">{Math.min(visibleCount, sortedHospitals.length)}</strong> of <strong className="text-slate-900">{sortedHospitals.length}</strong> facilities
+                </span>
+                {visibleCount < sortedHospitals.length && (
+                  <span className="text-red-600">
+                    +{sortedHospitals.length - visibleCount} more available
+                  </span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sortedHospitals.slice(0, visibleCount).map((hosp) => (
+                  <HospitalCard
+                    key={hosp.id}
+                    hospital={hosp}
+                    onViewDetails={setSelectedHospital}
+                  />
+                ))}
+              </div>
+
+              {visibleCount < sortedHospitals.length && (
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-6 pb-4">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((prev) => prev + 24)}
+                    className="px-6 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold text-xs sm:text-sm rounded-2xl shadow-md transition-all flex items-center gap-2"
+                  >
+                    <span>Load More Hospitals (+24)</span>
+                    <span className="bg-red-700/60 text-white text-[10px] px-2 py-0.5 rounded-full">
+                      {sortedHospitals.length - visibleCount} Left
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(sortedHospitals.length)}
+                    className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs sm:text-sm rounded-2xl transition-all"
+                  >
+                    Show All ({sortedHospitals.length})
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>

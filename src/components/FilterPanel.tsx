@@ -186,6 +186,8 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
             <option value="Private Tertiary">Private Tertiary Hospital</option>
             <option value="District Hospital">District Hospital</option>
             <option value="Upazila Health Complex">Upazila Health Complex</option>
+            <option value="Union Health Center">Union Health Center / Sub Center</option>
+            <option value="Community Health Center">Community Dispensary & Clinic</option>
           </select>
         </div>
       </div>

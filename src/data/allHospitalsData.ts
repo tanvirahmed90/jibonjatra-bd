@@ -1,7 +1,9 @@
 import { Hospital } from '../types';
 import { DHAKA_COMPREHENSIVE_HOSPITALS } from './dhakaComprehensiveHospitals';
+import { DGHS_500_BANGLADESH_HOSPITALS } from './dghs500HospitalsData';
 
 export const COMPREHENSIVE_BANGLADESH_HOSPITALS: Hospital[] = [
+  ...DGHS_500_BANGLADESH_HOSPITALS,
   ...DHAKA_COMPREHENSIVE_HOSPITALS,
   // ==========================================
   // DHAKA DIVISION - RAMPURA & SURROUNDING HUBS

@@ -79,9 +79,9 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load or initialize state with localStorage backup (v5 includes ALL Dhaka areas & comprehensive hospitals)
+  // Load or initialize state with localStorage backup (v7 includes 500+ DGHS facilities nationwide)
   const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals_v5');
+    const saved = localStorage.getItem('jibonjatra_hospitals_v7');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -143,7 +143,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals_v5', JSON.stringify(hospitals));
+    localStorage.setItem('jibonjatra_hospitals_v7', JSON.stringify(hospitals));
   }, [hospitals]);
 
   useEffect(() => {
