@@ -55,6 +55,7 @@ export interface Hospital {
 export interface BloodDonor {
   id: string;
   name: string;
+  age?: number;
   bloodGroup: BloodGroup;
   phone: string;
   division: string;
@@ -79,6 +80,7 @@ export interface Ambulance {
   phone: string;
   vehicleType: 'ICU Ambulance' | 'AC Ambulance' | 'Non-AC Ambulance' | 'Freezing Ambulance';
   regNumber: string;
+  locationName?: string;
   lat: number;
   lng: number;
   distanceKm: number;
@@ -119,4 +121,10 @@ export interface User {
   facilityId?: string;
   ambulanceId?: string;
   donorId?: string;
+  age?: number;
+  bloodGroup?: BloodGroup;
+  area?: string;
+  lastDonationDate?: string;
+  regNumber?: string;
+  locationName?: string;
 }

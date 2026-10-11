@@ -312,43 +312,32 @@ export const INITIAL_AMBULANCES: Ambulance[] = [
 
 export const INITIAL_USERS: User[] = [
   {
-    id: 'user-patient',
-    name: 'Ariful Hassan',
-    email: 'ariful@gmail.com',
-    phone: '+880 1711 112233',
-    role: 'patient',
-    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=200'
-  },
-  {
     id: 'user-donor',
     name: 'Tanvir Ahmed',
     email: 'tanvir.donor@gmail.com',
     phone: '+880 1712 345678',
     role: 'donor',
     donorId: 'donor-1',
+    age: 26,
+    bloodGroup: 'O+',
+    area: 'Dhanmondi, Dhaka',
+    lastDonationDate: '2026-04-12',
     avatar: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&q=80&w=200'
   },
   {
-    id: 'user-hospital',
-    name: 'Dr. Shahana Akhter (DMCH Emergency Duty Officer)',
-    email: 'emergency@dmch.gov.bd',
-    phone: '+880 1711 005522',
-    role: 'hospital',
-    facilityId: 'hosp-dmch',
-    avatar: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&q=80&w=200'
-  },
-  {
     id: 'user-ambulance',
-    name: 'Rafiqul Alam (Red Crescent Ambulance #101)',
+    name: 'Rafiqul Alam',
     email: 'rafiqul.amb@redcrescent.org.bd',
     phone: '+880 1711 991122',
     role: 'ambulance',
     ambulanceId: 'amb-101',
+    regNumber: 'Dhaka Metro-Cha-11-2024',
+    locationName: 'Panthapath Standby Point, Dhaka',
     avatar: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&q=80&w=200'
   },
   {
     id: 'user-admin',
-    name: 'Central Operations Director, JibonJatra BD',
+    name: 'Central Operations Director (DGHS)',
     email: 'admin@jibonjatra.bd',
     phone: '+880 2 55165000',
     role: 'admin',

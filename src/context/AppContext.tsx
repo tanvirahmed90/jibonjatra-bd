@@ -32,11 +32,16 @@ interface AppContextType {
   requestEmergencyAssistance: (type: 'ambulance' | 'blood' | 'hospital' | 'icu', details?: Partial<EmergencyRequest>) => EmergencyRequest;
   updateHospitalFacility: (id: string, updates: Partial<Hospital>) => void;
   updateAmbulanceStatus: (id: string, status: 'available' | 'busy' | 'offline', etaMinutes?: number) => void;
+  updateDonorProfile: (donorId: string, updates: Partial<BloodDonor>) => void;
+  updateAmbulanceProfile: (ambulanceId: string, updates: Partial<Ambulance>) => void;
   registerDonor: (donor: Omit<BloodDonor, 'id' | 'distanceKm' | 'verified'>) => void;
-  switchUserRole: (role: UserRole) => void;
+  registerUserAccount: (userData: User, profileData?: { donor?: Partial<BloodDonor>; ambulance?: Partial<Ambulance> }) => void;
+  switchUserRole: (role: UserRole, autoNavigate?: boolean) => void;
   requestGeolocation: () => Promise<void>;
   setUserCustomLocation: (lat: number, lng: number, address: string) => void;
   verifyEntity: (type: 'hospital' | 'donor' | 'ambulance', id: string) => void;
+  toastMessage: string | null;
+  showToast: (msg: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -117,6 +122,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isDonorModalOpen, setIsDonorModalOpen] = useState<boolean>(false);
   const [activeEmergency, setActiveEmergency] = useState<EmergencyRequest | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(prev => (prev === msg ? null : prev));
+    }, 4000);
+  };
 
   // Sync to local storage
   useEffect(() => {
@@ -230,12 +243,150 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     });
   };
 
-  const switchUserRole = (role: UserRole) => {
+  const switchUserRole = (role: UserRole, autoNavigate: boolean = true) => {
     const found = INITIAL_USERS.find(u => u.role === role);
     if (found) {
       setCurrentUser(found);
     } else {
       setCurrentUser(prev => ({ ...prev, role }));
+    }
+
+    let targetView = 'ড্যাশবোর্ড';
+    if (autoNavigate) {
+      if (role === 'ambulance') {
+        setActiveTab('dashboard');
+        targetView = 'অ্যাম্বুলেন্স ড্রাইভার পোর্টাল';
+      } else if (role === 'admin') {
+        setActiveTab('admin');
+        targetView = 'ডিজিএইচএস সিস্টেম অ্যাডমিন কন্ট্রোল সেন্টার';
+      } else if (role === 'donor') {
+        setActiveTab('dashboard');
+        targetView = 'রক্তদাতা প্রোফাইল ড্যাশবোর্ড';
+      } else {
+        setActiveTab('home');
+        targetView = 'হোম পেজ';
+      }
+    }
+
+    const userName = found ? found.name : role;
+    showToast(`লগইন সফল: ${userName} (${targetView}-এ নিয়ে যাওয়া হয়েছে)`);
+  };
+
+  const updateDonorProfile = (donorId: string, updates: Partial<BloodDonor>) => {
+    setDonors(prev =>
+      prev.map(d => {
+        if (d.id === donorId) {
+          return {
+            ...d,
+            ...updates,
+            lastActive: 'Just now',
+          };
+        }
+        return d;
+      })
+    );
+
+    // Keep currentUser in sync
+    setCurrentUser(prev => ({
+      ...prev,
+      ...updates,
+      phone: updates.phone || prev.phone,
+      bloodGroup: updates.bloodGroup || prev.bloodGroup,
+      age: updates.age ?? prev.age,
+      area: updates.area || prev.area,
+      lastDonationDate: updates.lastDonationDate || prev.lastDonationDate,
+    }));
+
+    showToast('✅ রক্তদাতার তথ্য (বয়স, গ্রুপ, ফোন, এলাকা ও শেষ রক্তদান) সফলভাবে আপডেট হয়েছে!');
+  };
+
+  const updateAmbulanceProfile = (ambulanceId: string, updates: Partial<Ambulance>) => {
+    setAmbulances(prev =>
+      prev.map(a => {
+        if (a.id === ambulanceId) {
+          return {
+            ...a,
+            ...updates,
+            lastUpdated: 'Just now',
+          };
+        }
+        return a;
+      })
+    );
+
+    // Keep currentUser in sync
+    setCurrentUser(prev => ({
+      ...prev,
+      phone: updates.phone || prev.phone,
+      regNumber: updates.regNumber || prev.regNumber,
+      locationName: updates.locationName || prev.locationName,
+    }));
+
+    showToast('✅ অ্যাম্বুলেন্সের গাড়ির নম্বর, ফোন নম্বর ও লোকেশন সফলভাবে আপডেট হয়েছে!');
+  };
+
+  const registerUserAccount = (
+    userData: User,
+    profileData?: { donor?: Partial<BloodDonor>; ambulance?: Partial<Ambulance> }
+  ) => {
+    if (userData.role === 'donor') {
+      const newDonorId = `donor-${Date.now()}`;
+      const newDonor: BloodDonor = {
+        id: newDonorId,
+        name: userData.name,
+        age: userData.age || 25,
+        bloodGroup: userData.bloodGroup || 'O+',
+        phone: userData.phone,
+        division: 'Dhaka',
+        district: 'Dhaka',
+        area: userData.area || 'Dhanmondi, Dhaka',
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        distanceKm: 0,
+        available: true,
+        emergencyEligible: true,
+        lastActive: 'Just now',
+        lastDonationDate: userData.lastDonationDate || new Date().toISOString().split('T')[0],
+        donationCount: 1,
+        verified: true,
+        contactPreference: 'both',
+        ...profileData?.donor,
+      };
+      setDonors(prev => [newDonor, ...prev]);
+      const finalUser: User = { ...userData, id: `user-${Date.now()}`, donorId: newDonorId };
+      setCurrentUser(finalUser);
+      setActiveTab('dashboard');
+      showToast(`স্বাগতম ${userData.name}! আপনার রক্তদাতা একাউন্ট তৈরি হয়েছে।`);
+    } else if (userData.role === 'ambulance') {
+      const newAmbId = `amb-${Date.now()}`;
+      const newAmb: Ambulance = {
+        id: newAmbId,
+        providerName: userData.name + ' Emergency Dispatch',
+        driverName: userData.name,
+        phone: userData.phone,
+        vehicleType: 'AC Ambulance',
+        regNumber: userData.regNumber || 'Dhaka Metro-Cha-11-2024',
+        locationName: userData.locationName || 'Panthapath Standby Point, Dhaka',
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+        distanceKm: 0,
+        etaMinutes: 5,
+        status: 'available',
+        fareEstimate: 'Standard Rate',
+        features: ['Oxygen Support', 'First Aid Kit'],
+        lastUpdated: 'Just now',
+        ...profileData?.ambulance,
+      };
+      setAmbulances(prev => [newAmb, ...prev]);
+      const finalUser: User = { ...userData, id: `user-${Date.now()}`, ambulanceId: newAmbId };
+      setCurrentUser(finalUser);
+      setActiveTab('dashboard');
+      showToast(`স্বাগতম ${userData.name}! আপনার অ্যাম্বুলেন্স চালক একাউন্ট তৈরি হয়েছে।`);
+    } else {
+      const finalUser: User = { ...userData, id: `user-${Date.now()}`, role: 'admin' };
+      setCurrentUser(finalUser);
+      setActiveTab('admin');
+      showToast(`স্বাগতম! আপনি সিস্টেম অ্যাডমিন হিসেবে যুক্ত হয়েছেন।`);
     }
   };
 
@@ -373,11 +524,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         requestEmergencyAssistance,
         updateHospitalFacility,
         updateAmbulanceStatus,
+        updateDonorProfile,
+        updateAmbulanceProfile,
         registerDonor,
+        registerUserAccount,
         switchUserRole,
         requestGeolocation,
         setUserCustomLocation,
         verifyEntity,
+        toastMessage,
+        showToast,
       }}
     >
       {children}

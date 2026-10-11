@@ -12,9 +12,9 @@ import { HomeView } from './views/HomeView';
 import { HospitalsView } from './views/HospitalsView';
 import { BloodView } from './views/BloodView';
 import { AmbulanceView } from './views/AmbulanceView';
-import { HospitalDashboard } from './components/HospitalDashboard';
 import { AmbulanceDashboard } from './components/AmbulanceDashboard';
 import { AdminDashboard } from './components/AdminDashboard';
+import { DonorDashboard } from './components/DonorDashboard';
 
 const MainContent: React.FC = () => {
   const {
@@ -28,6 +28,7 @@ const MainContent: React.FC = () => {
     setIsDonorModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
+    toastMessage,
   } = useApp();
 
   const renderActiveView = () => {
@@ -47,7 +48,7 @@ const MainContent: React.FC = () => {
         if (currentUser.role === 'admin') {
           return <AdminDashboard />;
         }
-        return <HospitalDashboard />;
+        return <DonorDashboard />;
       case 'admin':
         return <AdminDashboard />;
       default:
@@ -59,6 +60,14 @@ const MainContent: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#F7F9FC] text-slate-800 font-sans selection:bg-red-500 selection:text-white">
       {/* Top Navigation */}
       <Navbar />
+
+      {/* Floating Role Switch / Action Feedback Toast */}
+      {toastMessage && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-[1400] max-w-lg w-[92%] sm:w-auto bg-slate-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700/80 flex items-center gap-3 animate-in fade-in slide-in-from-top-3 duration-200 pointer-events-none">
+          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping flex-shrink-0"></span>
+          <p className="text-xs sm:text-sm font-medium tracking-wide text-slate-100">{toastMessage}</p>
+        </div>
+      )}
 
       {/* Main Page Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 md:pb-12">

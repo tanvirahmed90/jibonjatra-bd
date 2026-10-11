@@ -31,16 +31,13 @@ export const Navbar: React.FC = () => {
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
-      case 'hospital':
-        return { label: 'Hospital Staff', color: 'bg-emerald-100 text-emerald-800' };
       case 'ambulance':
-        return { label: 'Ambulance Dispatch', color: 'bg-amber-100 text-amber-800' };
-      case 'donor':
-        return { label: 'Blood Donor', color: 'bg-rose-100 text-rose-800' };
+        return { label: 'Ambulance Driver', color: 'bg-amber-100 text-amber-800' };
       case 'admin':
         return { label: 'System Admin', color: 'bg-purple-100 text-purple-800' };
+      case 'donor':
       default:
-        return { label: 'Citizen', color: 'bg-blue-100 text-blue-800' };
+        return { label: 'Blood Donor', color: 'bg-rose-100 text-rose-800' };
     }
   };
 
@@ -89,19 +86,17 @@ export const Navbar: React.FC = () => {
               </button>
             ))}
 
-            {/* Dashboards shortcut if applicable */}
-            {currentUser.role !== 'patient' && (
-              <button
-                onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
-                className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
-                  activeTab === 'dashboard' || activeTab === 'admin'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                }`}
-              >
-                ⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : 'My Dashboard'}
-              </button>
-            )}
+            {/* Dashboards shortcut for active role */}
+            <button
+              onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
+              className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
+                activeTab === 'dashboard' || activeTab === 'admin'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+              }`}
+            >
+              ⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : currentUser.role === 'ambulance' ? 'Driver Portal' : 'Donor Profile'}
+            </button>
 
             {/* Glowing Emergency Button in Center/Desktop */}
             <button
@@ -130,27 +125,35 @@ export const Navbar: React.FC = () => {
               </button>
 
               {roleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-52 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
                   <div className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1">
-                    Switch Test Profile:
+                    Select Profile Role:
                   </div>
-                  {(['patient', 'hospital', 'ambulance', 'donor', 'admin'] as UserRole[]).map((r) => (
-                    <button
-                      key={r}
-                      onClick={() => {
-                        switchUserRole(r);
-                        setRoleDropdownOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                        currentUser.role === r
-                          ? 'bg-blue-50 text-blue-700 font-bold'
-                          : 'text-slate-700 hover:bg-slate-50'
-                      }`}
-                    >
-                      <span className="capitalize">{r === 'patient' ? 'Citizen (Patient)' : r}</span>
-                      {currentUser.role === r && <span className="text-blue-600 font-bold">✓</span>}
-                    </button>
-                  ))}
+                  {(['donor', 'ambulance', 'admin'] as UserRole[]).map((r) => {
+                    const label = 
+                      r === 'donor' 
+                        ? '🩸 Blood Donor (রক্তদাতা)' 
+                        : r === 'ambulance' 
+                        ? '🚑 Ambulance Driver (চালক)' 
+                        : '🛡️ System Admin (অ্যাডমিন)';
+                    return (
+                      <button
+                        key={r}
+                        onClick={() => {
+                          switchUserRole(r);
+                          setRoleDropdownOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
+                          currentUser.role === r
+                            ? 'bg-blue-50 text-blue-700 font-bold'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        <span>{label}</span>
+                        {currentUser.role === r && <span className="text-blue-600 font-bold">✓</span>}
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>

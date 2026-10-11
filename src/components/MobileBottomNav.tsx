@@ -1,13 +1,13 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { Home, Building2, Droplet, Truck, User } from 'lucide-react';
+import { Home, Building2, Droplet, Truck, LayoutDashboard } from 'lucide-react';
 
 export const MobileBottomNav: React.FC = () => {
   const {
     activeTab,
     setActiveTab,
     setIsEmergencyModeOpen,
-    setIsAuthModalOpen,
+    currentUser,
   } = useApp();
 
   const handleTab = (tab: string) => {
@@ -80,6 +80,22 @@ export const MobileBottomNav: React.FC = () => {
           <Truck className="w-5 h-5" />
           <span className="text-[10px] mt-0.5">Ambulance</span>
         </button>
+
+        {/* Role Dashboard for Hospital Staff / Ambulance Driver / Admin */}
+        {currentUser.role !== 'patient' && (
+          <button
+            type="button"
+            onClick={() => handleTab(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
+            className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
+              activeTab === 'dashboard' || activeTab === 'admin'
+                ? 'text-blue-600 font-bold'
+                : 'text-blue-500 hover:text-blue-700'
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="text-[10px] mt-0.5 font-bold">Portal</span>
+          </button>
+        )}
       </div>
     </nav>
   );
