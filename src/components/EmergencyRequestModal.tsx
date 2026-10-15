@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { X, Phone, Navigation, AlertTriangle, CheckCircle2, Clock, MapPin, Loader2, ArrowRight } from 'lucide-react';
-import { BloodGroup } from '../types';
+import { X, Phone, Navigation, AlertTriangle, CheckCircle2, Clock, MapPin, Loader2, ArrowRight, Map as MapIcon, ExternalLink } from 'lucide-react';
+import { BloodGroup, Hospital, Ambulance, BloodDonor } from '../types';
 import { formatDistance } from '../utils/geo';
 
 interface EmergencyRequestModalProps {
@@ -10,6 +10,20 @@ interface EmergencyRequestModalProps {
 }
 
 type EmergencyCategory = 'ambulance' | 'blood' | 'hospital' | 'icu';
+
+interface AssignedInfo {
+  name: string;
+  phone: string;
+  distance: string;
+  eta: number;
+  type: string;
+  address?: string;
+  lat: number;
+  lng: number;
+  hospital?: Hospital;
+  ambulance?: Ambulance;
+  donor?: BloodDonor;
+}
 
 export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ isOpen, onClose }) => {
   const {
@@ -21,6 +35,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
     donors,
     setSelectedHospital,
     setActiveTab,
+    navigateToHospitalMap,
   } = useApp();
 
   const [step, setStep] = useState<'select' | 'details' | 'dispatching' | 'connected'>('select');
@@ -28,13 +43,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
   const [selectedBloodGroup, setSelectedBloodGroup] = useState<BloodGroup>('O+');
   const [isLocating, setIsLocating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Emergency Request Created');
-  const [assignedInfo, setAssignedInfo] = useState<{
-    name: string;
-    phone: string;
-    distance: string;
-    eta: number;
-    type: string;
-  } | null>(null);
+  const [assignedInfo, setAssignedInfo] = useState<AssignedInfo | null>(null);
 
   // Automatically request location when emergency mode is entered
   useEffect(() => {
@@ -43,7 +52,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
       setSelectedType(null);
       if (!userLocation.isLive) {
         setIsLocating(true);
-        requestGeolocation().finally(() => setIsLocating(false));
+        requestGeolocation(true).finally(() => setIsLocating(false));
       }
     }
   }, [isOpen]);
@@ -84,6 +93,12 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
       let dist = '1.2 km away';
       let eta = 6;
       let typeLabel = 'Emergency Service';
+      let matchedAddress = 'Central Dispatch, Dhaka';
+      let targetLat = userLocation.lat;
+      let targetLng = userLocation.lng;
+      let matchedHospital: Hospital | undefined;
+      let matchedAmbulance: Ambulance | undefined;
+      let matchedDonor: BloodDonor | undefined;
 
       if (cat === 'ambulance') {
         const sorted = [...ambulances].filter(a => a.status === 'available').sort((a, b) => a.distanceKm - b.distanceKm);
@@ -93,6 +108,10 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
         dist = formatDistance(best.distanceKm);
         eta = best.etaMinutes;
         typeLabel = best.vehicleType;
+        targetLat = best.lat;
+        targetLng = best.lng;
+        matchedAddress = `Active in Dhaka Sector (${dist})`;
+        matchedAmbulance = best;
       } else if (cat === 'blood') {
         const group = bloodGrp || selectedBloodGroup;
         const matched = donors.find(d => d.available && d.bloodGroup === group) || donors[0];
@@ -101,6 +120,10 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
         dist = formatDistance(matched.distanceKm);
         eta = 15;
         typeLabel = `Verified Donor (${matched.area})`;
+        targetLat = matched.lat;
+        targetLng = matched.lng;
+        matchedAddress = `${matched.area}, Bangladesh`;
+        matchedDonor = matched;
       } else if (cat === 'hospital' || cat === 'icu') {
         const sorted = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm);
         const best = sorted[0];
@@ -109,6 +132,10 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
         dist = formatDistance(best.distanceKm);
         eta = Math.round(best.distanceKm * 2.8 + 3);
         typeLabel = `${best.type} • Bed Available`;
+        targetLat = best.lat;
+        targetLng = best.lng;
+        matchedAddress = best.address;
+        matchedHospital = best;
       }
 
       setAssignedInfo({
@@ -117,6 +144,12 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
         distance: dist,
         eta,
         type: typeLabel,
+        address: matchedAddress,
+        lat: targetLat,
+        lng: targetLng,
+        hospital: matchedHospital,
+        ambulance: matchedAmbulance,
+        donor: matchedDonor,
       });
 
       setStatusMessage(cat === 'ambulance' ? '🚑 Ambulance Contacted & Assigned!' : '⚡ Emergency Resource Connected!');
@@ -161,11 +194,20 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
 
           <button
             type="button"
-            onClick={() => requestGeolocation()}
-            className="text-red-700 hover:text-red-900 font-bold underline flex-shrink-0 flex items-center gap-1"
+            onClick={async () => {
+              setIsLocating(true);
+              try {
+                await requestGeolocation();
+              } finally {
+                setIsLocating(false);
+              }
+            }}
+            disabled={isLocating}
+            className="text-red-700 hover:text-red-900 font-bold underline flex-shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-60"
+            title="Detect and refresh GPS location"
           >
-            {isLocating && <Loader2 className="w-3 h-3 animate-spin" />}
-            <span>Refresh GPS</span>
+            {isLocating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+            <span>{isLocating ? 'Detecting GPS...' : 'Refresh GPS'}</span>
           </button>
         </div>
 
@@ -339,62 +381,113 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
 
         {/* STEP 3: Connected & Actionable Screen */}
         {step === 'connected' && assignedInfo && (
-          <div className="p-6 space-y-5 animate-in fade-in duration-200">
+          <div className="p-4 sm:p-6 space-y-3.5 sm:space-y-4 animate-in fade-in duration-200">
             {/* Success Status Badge */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 flex items-center gap-3">
-              <CheckCircle2 className="w-6 h-6 text-emerald-600 flex-shrink-0" />
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-3 sm:p-4 flex items-center gap-2.5 sm:gap-3">
+              <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 flex-shrink-0" />
               <div>
-                <h4 className="font-bold text-emerald-900 text-sm">{statusMessage}</h4>
-                <p className="text-xs text-emerald-700">Immediate direct line established with the responder</p>
+                <h4 className="font-bold text-emerald-900 text-xs sm:text-sm">{statusMessage}</h4>
+                <p className="text-[11px] sm:text-xs text-emerald-700">Immediate direct line established with the responder</p>
               </div>
             </div>
 
             {/* Assigned Provider Box */}
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 space-y-3">
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 sm:p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <span className="text-[11px] uppercase font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded">
+                  <span className="text-[10px] sm:text-[11px] uppercase font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded">
                     {assignedInfo.type}
                   </span>
-                  <h3 className="font-display font-bold text-xl text-slate-900 mt-1">
+                  <h3 className="font-display font-bold text-lg sm:text-xl text-slate-900 mt-1">
                     {assignedInfo.name}
                   </h3>
-                  <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{assignedInfo.distance} from your location</span>
+                  {assignedInfo.address && (
+                    <p className="text-[11px] sm:text-xs text-slate-700 flex items-start gap-1.5 mt-1 font-medium">
+                      <MapPin className="w-3.5 h-3.5 text-red-600 shrink-0 mt-0.5" />
+                      <span>{assignedInfo.address}</span>
+                    </p>
+                  )}
+                  <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                    <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                    <span>{assignedInfo.distance} from your incident point</span>
                   </p>
                 </div>
 
-                <div className="bg-red-600 text-white rounded-xl px-3 py-2 text-center flex-shrink-0 shadow-sm">
-                  <span className="text-[10px] uppercase font-bold text-red-200 block">Est. Time</span>
-                  <span className="text-xl font-black font-display">{assignedInfo.eta} mins</span>
+                <div className="bg-red-600 text-white rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-center flex-shrink-0 shadow-sm">
+                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-red-200 block">Est. Time</span>
+                  <span className="text-lg sm:text-xl font-black font-display">{assignedInfo.eta} mins</span>
                 </div>
               </div>
 
               {/* Progress Tracker Steps */}
-              <div className="bg-white p-3 rounded-xl border border-slate-200/80 text-xs space-y-2">
+              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 text-[11px] sm:text-xs space-y-1.5 sm:space-y-2">
                 <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                   <span>Emergency Request Created (Logged in JibonJatra BD)</span>
                 </div>
                 <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
                   <span>Resource Located & Alerted</span>
                 </div>
                 <div className="flex items-center gap-2 text-blue-700 font-semibold animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
                   <span>Estimated Arrival / Transit: {assignedInfo.eta} minutes</span>
                 </div>
               </div>
+
+              {/* Real Location Navigation Buttons */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2 sm:py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center"
+                  title="Open live Google Maps turn-by-turn directions"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Google Maps GPS Navigation</span>
+                  <ExternalLink className="w-3 h-3 text-blue-500" />
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    if (assignedInfo.hospital) {
+                      navigateToHospitalMap(assignedInfo.hospital);
+                    } else if (selectedType === 'blood') {
+                      setActiveTab('blood');
+                    } else if (selectedType === 'ambulance') {
+                      setActiveTab('ambulance');
+                    } else {
+                      setActiveTab('hospitals');
+                    }
+                  }}
+                  className="py-2 sm:py-2.5 px-3 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center"
+                >
+                  <MapIcon className="w-3.5 h-3.5 text-red-600" />
+                  <span>View Hospital Pin on Map</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
             </div>
 
-            {/* Large Call Button */}
+            {/* Compact & Proportional Call Responder Button */}
             <a
               href={`tel:${assignedInfo.phone}`}
-              className="w-full py-4 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-extrabold text-lg rounded-2xl shadow-emergency flex items-center justify-center gap-3 transition-all active:scale-98 tracking-wide text-center"
+              className="w-full py-2.5 sm:py-3 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl sm:rounded-2xl shadow-emergency flex items-center justify-center gap-3 transition-all active:scale-98 text-center group"
             >
-              <Phone className="w-5 h-5 animate-bounce" />
-              <span>CALL RESPONDER NOW ({assignedInfo.phone})</span>
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center shrink-0">
+                <Phone className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white animate-bounce" />
+              </div>
+              <div className="flex items-center gap-2 flex-wrap justify-center">
+                <span className="text-xs sm:text-sm font-extrabold tracking-wide uppercase">
+                  CALL RESPONDER NOW:
+                </span>
+                <span className="text-xs sm:text-sm font-black font-mono tracking-wider bg-black/20 px-2 py-0.5 rounded-lg">
+                  {assignedInfo.phone}
+                </span>
+              </div>
             </a>
 
             <div className="flex items-center justify-between text-xs pt-2">
@@ -412,7 +505,9 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
                 type="button"
                 onClick={() => {
                   onClose();
-                  if (selectedType === 'hospital' || selectedType === 'icu') {
+                  if (assignedInfo.hospital) {
+                    navigateToHospitalMap(assignedInfo.hospital);
+                  } else if (selectedType === 'hospital' || selectedType === 'icu') {
                     setActiveTab('hospitals');
                   } else if (selectedType === 'blood') {
                     setActiveTab('blood');
@@ -420,9 +515,10 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
                     setActiveTab('ambulance');
                   }
                 }}
-                className="text-blue-600 hover:text-blue-800 font-bold"
+                className="text-blue-600 hover:text-blue-800 font-bold flex items-center gap-1 hover:underline"
               >
-                View Full Map & Options →
+                <span>View Full Map & Options</span>
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>

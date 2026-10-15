@@ -13,10 +13,11 @@ interface MapProps {
 }
 
 export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] md:h-[540px]' }) => {
-  const { hospitals, donors, ambulances, userLocation, setSelectedHospital } = useApp();
+  const { hospitals, donors, ambulances, userLocation, setSelectedHospital, requestGeolocation, setUserCustomLocation } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
+  const hospitalMarkersRef = useRef<Record<string, L.Marker>>({});
 
   // Filter toggles
   const [showHospitals, setShowHospitals] = useState(true);
@@ -62,19 +63,30 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
   // Smooth flyTo whenever userLocation changes (GPS or selected area)
   useEffect(() => {
-    if (mapInstanceRef.current && userLocation.lat && userLocation.lng) {
+    if (mapInstanceRef.current && userLocation.lat && userLocation.lng && !centerOnHospital) {
       mapInstanceRef.current.flyTo([userLocation.lat, userLocation.lng], 13.5, {
         duration: 1.2,
       });
     }
-  }, [userLocation.lat, userLocation.lng]);
+  }, [userLocation.lat, userLocation.lng, centerOnHospital]);
 
-  // Update map center if hospital is specifically selected
+  // Update map center and auto-open popup if hospital is specifically selected/focused
   useEffect(() => {
     if (mapInstanceRef.current && centerOnHospital) {
-      mapInstanceRef.current.flyTo([centerOnHospital.lat, centerOnHospital.lng], 15, {
+      // Invalidate size to ensure container dimensions are accurate after view switch
+      mapInstanceRef.current.invalidateSize();
+      mapInstanceRef.current.flyTo([centerOnHospital.lat, centerOnHospital.lng], 16, {
         duration: 1.2,
       });
+
+      const timer = setTimeout(() => {
+        const marker = hospitalMarkersRef.current[centerOnHospital.id];
+        if (marker) {
+          marker.openPopup();
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
     }
   }, [centerOnHospital]);
 
@@ -125,21 +137,24 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
     // 2. Hospitals Markers (Red Emergency Cross)
     if (showHospitals) {
+      hospitalMarkersRef.current = {};
       hospitals.forEach(hosp => {
         const isNearby = hosp.distanceKm <= 5;
+        const isFocused = centerOnHospital?.id === hosp.id;
+
         const hospIcon = L.divIcon({
-          className: 'custom-hosp-marker',
+          className: isFocused ? 'custom-hosp-marker-focused' : 'custom-hosp-marker',
           html: `
             <div style="position: relative;">
-              <div style="background: ${isNearby ? '#DC2626' : '#EF4444'}; color: white; width: ${isNearby ? '34px' : '30px'}; height: ${isNearby ? '34px' : '30px'}; border-radius: 9px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: ${isNearby ? '18px' : '16px'}; border: 2.5px solid white; box-shadow: 0 3px 8px rgba(0,0,0,0.35); cursor: pointer; transition: transform 0.2s;">
+              <div style="background: ${isFocused ? '#B91C1C' : isNearby ? '#DC2626' : '#EF4444'}; color: white; width: ${isFocused ? '42px' : isNearby ? '34px' : '30px'}; height: ${isFocused ? '42px' : isNearby ? '34px' : '30px'}; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: ${isFocused ? '22px' : isNearby ? '18px' : '16px'}; border: ${isFocused ? '3.5px solid #FEF08A' : '2.5px solid white'}; box-shadow: ${isFocused ? '0 0 0 7px rgba(220, 38, 38, 0.45), 0 4px 14px rgba(0,0,0,0.5)' : '0 3px 8px rgba(0,0,0,0.35)'}; cursor: pointer; transition: transform 0.2s;">
                 ✚
               </div>
-              ${isNearby ? '<span style="position: absolute; -top: 6px; -right: 6px; background: #16A34A; color: white; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 999px; border: 1.5px solid white;">NEAR</span>' : ''}
+              ${isFocused ? '<span style="position: absolute; -top: 8px; -right: 8px; background: #DC2626; color: #FEF08A; font-size: 9px; font-weight: 900; padding: 1.5px 5px; border-radius: 999px; border: 1.5px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">TARGET</span>' : isNearby ? '<span style="position: absolute; -top: 6px; -right: 6px; background: #16A34A; color: white; font-size: 8px; font-weight: 800; padding: 1px 4px; border-radius: 999px; border: 1.5px solid white;">NEAR</span>' : ''}
             </div>
           `,
-          iconSize: [34, 34],
-          iconAnchor: [17, 17],
-          popupAnchor: [0, -17],
+          iconSize: isFocused ? [42, 42] : [34, 34],
+          iconAnchor: isFocused ? [21, 21] : [17, 17],
+          popupAnchor: isFocused ? [0, -21] : [0, -17],
         });
 
         const popupContent = `
@@ -172,10 +187,11 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           </div>
         `;
 
-        const marker = L.marker([hosp.lat, hosp.lng], { icon: hospIcon })
+        const marker = L.marker([hosp.lat, hosp.lng], { icon: hospIcon, zIndexOffset: isFocused ? 2000 : 500 })
           .bindPopup(popupContent);
         
         layer.addLayer(marker);
+        hospitalMarkersRef.current[hosp.id] = marker;
       });
     }
 
@@ -248,9 +264,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         layer.addLayer(marker);
       });
     }
-  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors]);
-
-  const { requestGeolocation, setUserCustomLocation } = useApp();
+  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors, centerOnHospital]);
 
   const handleMyLocationClick = async () => {
     setIsLocating(true);

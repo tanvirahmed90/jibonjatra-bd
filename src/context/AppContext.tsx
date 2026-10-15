@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, UserRole } from '../types';
 import { INITIAL_HOSPITALS, INITIAL_BLOOD_DONORS, INITIAL_AMBULANCES, INITIAL_USERS } from '../data/mockData';
-import { calculateDistanceKm } from '../utils/geo';
+import { calculateDistanceKm, getGeolocationWithFallbacks, fetchIpLocation } from '../utils/geo';
 
 interface UserLocation {
   lat: number;
@@ -23,6 +23,11 @@ interface AppContextType {
   setIsEmergencyModeOpen: (open: boolean) => void;
   selectedHospital: Hospital | null;
   setSelectedHospital: (hospital: Hospital | null) => void;
+  hospitalsViewMode: 'grid' | 'map';
+  setHospitalsViewMode: (mode: 'grid' | 'map') => void;
+  focusedHospital: Hospital | null;
+  setFocusedHospital: (hospital: Hospital | null) => void;
+  navigateToHospitalMap: (hospital: Hospital) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
   isDonorModalOpen: boolean;
@@ -37,7 +42,7 @@ interface AppContextType {
   registerDonor: (donor: Omit<BloodDonor, 'id' | 'distanceKm' | 'verified'>) => void;
   registerUserAccount: (userData: User, profileData?: { donor?: Partial<BloodDonor>; ambulance?: Partial<Ambulance> }) => void;
   switchUserRole: (role: UserRole, autoNavigate?: boolean) => void;
-  requestGeolocation: () => Promise<void>;
+  requestGeolocation: (silent?: boolean) => Promise<boolean>;
   setUserCustomLocation: (lat: number, lng: number, address: string) => void;
   verifyEntity: (type: 'hospital' | 'donor' | 'ambulance', id: string) => void;
   toastMessage: string | null;
@@ -125,8 +130,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return saved ? JSON.parse(saved) : INITIAL_USERS[0];
   });
 
-  const [userLocation, setUserLocation] = useState<UserLocation>(DEFAULT_LOCATION);
+  const [userLocation, setUserLocation] = useState<UserLocation>(() => {
+    const saved = localStorage.getItem('jibonjatra_user_location');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error reading stored location:', e);
+      }
+    }
+    return DEFAULT_LOCATION;
+  });
+
   const [activeTab, setActiveTab] = useState<string>('home');
+  const [hospitalsViewMode, setHospitalsViewMode] = useState<'grid' | 'map'>('grid');
+  const [focusedHospital, setFocusedHospital] = useState<Hospital | null>(null);
   const [isEmergencyModeOpen, setIsEmergencyModeOpen] = useState<boolean>(false);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -138,7 +159,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(prev => (prev === msg ? null : prev));
-    }, 4000);
+    }, 4500);
   };
 
   // Sync to local storage
@@ -162,27 +183,105 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     localStorage.setItem('jibonjatra_current_user', JSON.stringify(currentUser));
   }, [currentUser]);
 
-  // Automatically detect user GPS location on startup if permitted
   useEffect(() => {
-    if (typeof navigator !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const address = await reverseGeocode(lat, lng);
-          setUserLocation({
-            lat,
-            lng,
-            address,
-            isLive: true,
-          });
-        },
-        (err) => {
-          console.log('Location detection on start:', err.message);
-        },
-        { enableHighAccuracy: true, timeout: 6000, maximumAge: 180000 }
-      );
+    localStorage.setItem('jibonjatra_user_location', JSON.stringify(userLocation));
+  }, [userLocation]);
+
+  /**
+   * Helper to apply new coordinates immediately (so distance calculations update with 0ms delay)
+   * while resolving the human-readable address asynchronously.
+   */
+  const applyLocation = (lat: number, lng: number, isLive: boolean, initialAddress?: string) => {
+    setUserLocation(prev => ({
+      lat,
+      lng,
+      address: initialAddress || (isLive ? `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})` : prev.address),
+      isLive,
+    }));
+
+    reverseGeocode(lat, lng).then(addr => {
+      setUserLocation(prev => {
+        if (Math.abs(prev.lat - lat) < 0.0001 && Math.abs(prev.lng - lng) < 0.0001) {
+          return { ...prev, address: addr };
+        }
+        return prev;
+      });
+    });
+  };
+
+  /**
+   * Robust multi-tier geolocation request that succeeds on both Android and iOS devices.
+   */
+  const requestGeolocation = async (silent: boolean = false): Promise<boolean> => {
+    try {
+      const result = await getGeolocationWithFallbacks();
+      applyLocation(result.lat, result.lng, result.source !== 'ip');
+
+      if (!silent) {
+        if (result.source === 'ip') {
+          showToast('📍 নেটওয়ার্ক লোকেশন সক্রিয় হয়েছে (Android-এ সরাসরি GPS-এর জন্য ব্রাউজারে Location Allow করুন)');
+        } else {
+          showToast('📍 লাইভ GPS লোকেশন সফলভাবে আপডেট হয়েছে');
+        }
+      }
+      return true;
+    } catch (err: unknown) {
+      console.warn('Geolocation request failed, attempting IP fallback:', err);
+      const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
+
+      try {
+        const ipRes = await fetchIpLocation();
+        if (ipRes) {
+          applyLocation(ipRes.lat, ipRes.lng, false, ipRes.errorMessage || 'Network IP Location');
+          if (!silent) {
+            showToast(isAndroid
+              ? '⚠️ Android ডিভাইসে লাইভ GPS পাওয়ার জন্য ব্রাউজারের Lock আইকন থেকে Location Allow করুন ও ফোনের GPS চালু করুন।'
+              : '📍 ডিভাইস GPS পাওয়া যায়নি, আনুমানিক নেটওয়ার্ক লোকেশন সক্রিয় করা হয়েছে।');
+          }
+          return true;
+        }
+      } catch {
+        // silent
+      }
+
+      if (!silent) {
+        if (isAndroid) {
+          showToast('⚠️ Android লোকেশন অ্যাক্সেস সম্ভব হয়নি। ব্রাউজার সাইট সেটিংসে Location Allow করুন এবং ফোনের GPS অন করুন।');
+        } else {
+          showToast('⚠️ লোকেশন পাওয়া যায়নি। ডিফল্ট ঢাকা লোকেশন সক্রিয় রয়েছে।');
+        }
+      }
+      return false;
     }
+  };
+
+  // Automatically detect user GPS location on startup with passive refinement
+  useEffect(() => {
+    let watchId: number | null = null;
+
+    requestGeolocation(true).then((success) => {
+      if (typeof navigator !== 'undefined' && navigator.geolocation && success) {
+        try {
+          watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+              if (pos.coords.accuracy <= 100) {
+                applyLocation(pos.coords.latitude, pos.coords.longitude, true);
+              }
+            },
+            () => {},
+            { enableHighAccuracy: true, maximumAge: 30000, timeout: 25000 }
+          );
+        } catch (e) {
+          console.warn('WatchPosition initialization error:', e);
+        }
+      }
+    });
+
+    return () => {
+      if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
   }, []);
 
   // Recalculate distances whenever user location changes
@@ -215,35 +314,6 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
   }, [userLocation]);
 
-  const requestGeolocation = async () => {
-    if (!navigator.geolocation) {
-      alert('Geolocation is not supported by your browser.');
-      return;
-    }
-
-    return new Promise<void>((resolve) => {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const lat = pos.coords.latitude;
-          const lng = pos.coords.longitude;
-          const address = await reverseGeocode(lat, lng);
-          setUserLocation({
-            lat,
-            lng,
-            address,
-            isLive: true,
-          });
-          resolve();
-        },
-        (err) => {
-          console.warn('Geolocation access denied or failed, staying on current setting.', err);
-          resolve();
-        },
-        { enableHighAccuracy: true, timeout: 8000 }
-      );
-    });
-  };
-
   const setUserCustomLocation = (lat: number, lng: number, address: string) => {
     setUserLocation({
       lat,
@@ -251,6 +321,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       address,
       isLive: false,
     });
+    showToast(`📍 এলাকা সেট করা হয়েছে: ${address}`);
+  };
+
+  /**
+   * Directly focus a hospital on the interactive map and switch view mode.
+   * This solves: "View Full Map & Options click korle map-e hospital-er real location show korbe"
+   */
+  const navigateToHospitalMap = (hospital: Hospital) => {
+    setFocusedHospital(hospital);
+    setHospitalsViewMode('map');
+    setActiveTab('hospitals');
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   };
 
   const switchUserRole = (role: UserRole, autoNavigate: boolean = true) => {
@@ -525,6 +609,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsEmergencyModeOpen,
         selectedHospital,
         setSelectedHospital,
+        hospitalsViewMode,
+        setHospitalsViewMode,
+        focusedHospital,
+        setFocusedHospital,
+        navigateToHospitalMap,
         isAuthModalOpen,
         setIsAuthModalOpen,
         isDonorModalOpen,

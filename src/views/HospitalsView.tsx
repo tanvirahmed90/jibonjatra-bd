@@ -4,17 +4,26 @@ import { HospitalCard } from '../components/HospitalCard';
 import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { Map } from '../components/Map';
-import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink, Layers, ArrowRight } from 'lucide-react';
+import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink, Layers, ArrowRight, Navigation } from 'lucide-react';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
 import { TOTAL_FACILITIES_COUNT, DIVISION_WISE_DISTRIBUTION } from '../data/facilityStats';
 import { filterAndRankHospitals } from '../utils/areaSearch';
+import { formatDistance } from '../utils/geo';
 
 export const HospitalsView: React.FC = () => {
-  const { hospitals, setSelectedHospital, userLocation, setUserCustomLocation } = useApp();
+  const {
+    hospitals,
+    setSelectedHospital,
+    userLocation,
+    setUserCustomLocation,
+    hospitalsViewMode,
+    setHospitalsViewMode,
+    focusedHospital,
+    setFocusedHospital,
+  } = useApp();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'map'>('grid');
 
   const [filters, setFilters] = useState<FilterState>({
     maxDistanceKm: 50,
@@ -33,6 +42,18 @@ export const HospitalsView: React.FC = () => {
   React.useEffect(() => {
     setVisibleCount(24);
   }, [searchQuery, filters]);
+
+  // When a hospital is focused from emergency dispatch, smoothly scroll down to the map
+  React.useEffect(() => {
+    if (focusedHospital && hospitalsViewMode === 'map') {
+      setTimeout(() => {
+        const el = document.getElementById('hospital-map-container');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }, 150);
+    }
+  }, [focusedHospital, hospitalsViewMode]);
 
   const handleResetFilters = () => {
     setFilters({
@@ -95,9 +116,9 @@ export const HospitalsView: React.FC = () => {
         <div className="flex items-center bg-white border border-slate-200 p-1 rounded-2xl shadow-sm self-start sm:self-auto">
           <button
             type="button"
-            onClick={() => setViewMode('grid')}
+            onClick={() => setHospitalsViewMode('grid')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              viewMode === 'grid' ? 'bg-red-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              hospitalsViewMode === 'grid' ? 'bg-red-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <Grid className="w-3.5 h-3.5" />
@@ -106,9 +127,9 @@ export const HospitalsView: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setViewMode('map')}
+            onClick={() => setHospitalsViewMode('map')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-              viewMode === 'map' ? 'bg-red-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
+              hospitalsViewMode === 'map' ? 'bg-red-600 text-white shadow' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
             <MapIcon className="w-3.5 h-3.5" />
@@ -218,7 +239,7 @@ export const HospitalsView: React.FC = () => {
                     searchResult.detectedArea!.lng,
                     `${searchResult.detectedArea!.name}, Dhaka`
                   );
-                  setViewMode('map');
+                  setHospitalsViewMode('map');
                 }}
                 className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white font-bold transition-all shadow-md flex items-center gap-2 text-xs"
               >
@@ -231,9 +252,63 @@ export const HospitalsView: React.FC = () => {
       </div>
 
       {/* View Content: Grid vs Map */}
-      {viewMode === 'map' ? (
-        <div className="space-y-4">
-          <Map height="h-[600px]" />
+      {hospitalsViewMode === 'map' ? (
+        <div id="hospital-map-container" className="space-y-4 scroll-mt-6">
+          {focusedHospital && (
+            <div className="bg-gradient-to-r from-red-600 via-rose-600 to-rose-700 text-white p-4 sm:p-5 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-in fade-in slide-in-from-top-2 border border-red-500">
+              <div className="flex items-start sm:items-center gap-3.5">
+                <div className="w-11 h-11 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-2xl shrink-0 shadow-inner">
+                  🏥
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] uppercase font-black tracking-wider bg-white text-red-700 px-2 py-0.5 rounded shadow-xs">
+                      Real Hospital Location
+                    </span>
+                    <span className="text-xs text-rose-100 font-bold">
+                      📍 {formatDistance(focusedHospital.distanceKm)} away
+                    </span>
+                  </div>
+                  <h3 className="font-display font-extrabold text-lg sm:text-xl text-white mt-0.5">
+                    {focusedHospital.name}
+                  </h3>
+                  <p className="text-xs text-rose-100 flex items-center gap-1.5 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-rose-200 shrink-0" />
+                    <span>{focusedHospital.address}</span>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${focusedHospital.lat},${focusedHospital.lng}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white text-red-700 hover:bg-rose-50 active:scale-95 text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-2 text-center"
+                  title="Open in native Google Maps"
+                >
+                  <Navigation className="w-3.5 h-3.5 text-red-600" />
+                  <span>Google Maps GPS Route</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setSelectedHospital(focusedHospital)}
+                  className="px-3.5 py-2.5 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-all"
+                >
+                  Facility Specs
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFocusedHospital(null)}
+                  className="px-3 py-2.5 rounded-xl bg-black/20 hover:bg-black/40 text-white text-xs font-bold transition-all"
+                  title="Show all hospitals on map"
+                >
+                  Show All Map
+                </button>
+              </div>
+            </div>
+          )}
+          <Map height="h-[600px]" centerOnHospital={focusedHospital} />
         </div>
       ) : (
         <div>
