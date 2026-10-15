@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, UserRole } from '../types';
 import { INITIAL_HOSPITALS, INITIAL_BLOOD_DONORS, INITIAL_AMBULANCES, INITIAL_USERS } from '../data/mockData';
-import { calculateDistanceKm, getGeolocationWithFallbacks, fetchIpLocation } from '../utils/geo';
+import { calculateDistanceKm, getGeolocationWithFallbacks } from '../utils/geo';
 
 interface UserLocation {
   lat: number;
@@ -215,40 +215,26 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const requestGeolocation = async (silent: boolean = false): Promise<boolean> => {
     try {
       const result = await getGeolocationWithFallbacks();
-      applyLocation(result.lat, result.lng, result.source !== 'ip');
+      applyLocation(result.lat, result.lng, true);
 
       if (!silent) {
-        if (result.source === 'ip') {
-          showToast('📍 নেটওয়ার্ক লোকেশন সক্রিয় হয়েছে (Android-এ সরাসরি GPS-এর জন্য ব্রাউজারে Location Allow করুন)');
-        } else {
-          showToast('📍 লাইভ GPS লোকেশন সফলভাবে আপডেট হয়েছে');
-        }
+        showToast('📍 লাইভ GPS লোকেশন সফলভাবে আপডেট হয়েছে');
       }
       return true;
     } catch (err: unknown) {
-      console.warn('Geolocation request failed, attempting IP fallback:', err);
+      console.warn('Geolocation request failed:', err);
       const isAndroid = typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent);
-
-      try {
-        const ipRes = await fetchIpLocation();
-        if (ipRes) {
-          applyLocation(ipRes.lat, ipRes.lng, false, ipRes.errorMessage || 'Network IP Location');
-          if (!silent) {
-            showToast(isAndroid
-              ? '⚠️ Android ডিভাইসে লাইভ GPS পাওয়ার জন্য ব্রাউজারের Lock আইকন থেকে Location Allow করুন ও ফোনের GPS চালু করুন।'
-              : '📍 ডিভাইস GPS পাওয়া যায়নি, আনুমানিক নেটওয়ার্ক লোকেশন সক্রিয় করা হয়েছে।');
-          }
-          return true;
-        }
-      } catch {
-        // silent
-      }
+      const errMsg = (err as Error)?.message;
 
       if (!silent) {
-        if (isAndroid) {
-          showToast('⚠️ Android লোকেশন অ্যাক্সেস সম্ভব হয়নি। ব্রাউজার সাইট সেটিংসে Location Allow করুন এবং ফোনের GPS অন করুন।');
+        if (errMsg === 'PERMISSION_DENIED') {
+          showToast(
+            isAndroid
+              ? '⚠️ লোকেশন পারমিশন বন্ধ আছে। ব্রাউজার সাইট সেটিংসে Location Allow করুন ও ফোনের GPS চালু করুন।'
+              : '⚠️ লোকেশন পারমিশন বন্ধ আছে। ব্রাউজার সেটিংসে Location চালু করুন।'
+          );
         } else {
-          showToast('⚠️ লোকেশন পাওয়া যায়নি। ডিফল্ট ঢাকা লোকেশন সক্রিয় রয়েছে।');
+          showToast('⚠️ লাইভ GPS পাওয়া যায়নি। ফোনের GPS চালু করুন অথবা নিচে "Change Area" থেকে আপনার এলাকা সিলেক্ট করুন।');
         }
       }
       return false;

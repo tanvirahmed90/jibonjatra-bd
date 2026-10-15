@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { X, Phone, Navigation, AlertTriangle, CheckCircle2, Clock, MapPin, Loader2, ArrowRight, Map as MapIcon, ExternalLink } from 'lucide-react';
 import { BloodGroup, Hospital, Ambulance, BloodDonor } from '../types';
-import { formatDistance } from '../utils/geo';
+import { formatDistance, POPULAR_BANGLADESH_AREAS } from '../utils/geo';
 
 interface EmergencyRequestModalProps {
   isOpen: boolean;
@@ -29,6 +29,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
   const {
     userLocation,
     requestGeolocation,
+    setUserCustomLocation,
     requestEmergencyAssistance,
     hospitals,
     ambulances,
@@ -42,6 +43,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
   const [selectedType, setSelectedType] = useState<EmergencyCategory | null>(null);
   const [selectedBloodGroup, setSelectedBloodGroup] = useState<BloodGroup>('O+');
   const [isLocating, setIsLocating] = useState(false);
+  const [showAreaPicker, setShowAreaPicker] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Emergency Request Created');
   const [assignedInfo, setAssignedInfo] = useState<AssignedInfo | null>(null);
 
@@ -50,12 +52,71 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
     if (isOpen) {
       setStep('select');
       setSelectedType(null);
+      setShowAreaPicker(false);
       if (!userLocation.isLive) {
         setIsLocating(true);
         requestGeolocation(true).finally(() => setIsLocating(false));
       }
     }
   }, [isOpen]);
+
+  // Re-sync assigned resource if location changes while in 'connected' view
+  useEffect(() => {
+    if (step === 'connected' && selectedType) {
+      if (selectedType === 'hospital' || selectedType === 'icu') {
+        const sorted = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm);
+        const best = sorted[0];
+        if (best) {
+          setAssignedInfo(prev => prev ? {
+            ...prev,
+            name: best.name,
+            phone: best.emergencyHotline,
+            distance: formatDistance(best.distanceKm),
+            eta: Math.round(best.distanceKm * 2.8 + 3),
+            type: `${best.type} • Bed Available`,
+            address: best.address,
+            lat: best.lat,
+            lng: best.lng,
+            hospital: best,
+          } : null);
+        }
+      } else if (selectedType === 'ambulance') {
+        const sorted = [...ambulances].filter(a => a.status === 'available').sort((a, b) => a.distanceKm - b.distanceKm);
+        const best = sorted[0] || ambulances[0];
+        if (best) {
+          const dist = formatDistance(best.distanceKm);
+          setAssignedInfo(prev => prev ? {
+            ...prev,
+            name: best.providerName,
+            phone: best.phone,
+            distance: dist,
+            eta: best.etaMinutes,
+            type: best.vehicleType,
+            address: `Active in Sector (${dist})`,
+            lat: best.lat,
+            lng: best.lng,
+            ambulance: best,
+          } : null);
+        }
+      } else if (selectedType === 'blood') {
+        const group = selectedBloodGroup;
+        const matched = donors.find(d => d.available && d.bloodGroup === group) || donors[0];
+        if (matched) {
+          setAssignedInfo(prev => prev ? {
+            ...prev,
+            name: `${matched.name} (${matched.bloodGroup})`,
+            phone: matched.phone,
+            distance: formatDistance(matched.distanceKm),
+            type: `Verified Donor (${matched.area})`,
+            address: `${matched.area}, Bangladesh`,
+            lat: matched.lat,
+            lng: matched.lng,
+            donor: matched,
+          } : null);
+        }
+      }
+    }
+  }, [userLocation.lat, userLocation.lng, hospitals, ambulances, donors, step, selectedType, selectedBloodGroup]);
 
   if (!isOpen) return null;
 
@@ -186,30 +247,71 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
         </div>
 
         {/* User Location Bar */}
-        <div className="bg-red-50/80 px-5 py-2.5 border-b border-red-100 flex items-center justify-between gap-2 text-xs">
-          <div className="flex items-center gap-1.5 text-slate-700 truncate">
+        <div className="bg-red-50/90 px-3.5 sm:px-5 py-2.5 border-b border-red-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+          <div className="flex items-center gap-1.5 text-slate-700 truncate min-w-0 max-w-[200px] sm:max-w-xs">
             <MapPin className="w-4 h-4 text-red-600 flex-shrink-0" />
-            <span>Incident Location: <strong>{userLocation.address}</strong></span>
+            <span className="truncate text-[11px] sm:text-xs">
+              Location: <strong>{userLocation.address}</strong>
+            </span>
           </div>
 
-          <button
-            type="button"
-            onClick={async () => {
-              setIsLocating(true);
-              try {
-                await requestGeolocation();
-              } finally {
-                setIsLocating(false);
-              }
-            }}
-            disabled={isLocating}
-            className="text-red-700 hover:text-red-900 font-bold underline flex-shrink-0 flex items-center gap-1 cursor-pointer disabled:opacity-60"
-            title="Detect and refresh GPS location"
-          >
-            {isLocating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            <span>{isLocating ? 'Detecting GPS...' : 'Refresh GPS'}</span>
-          </button>
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowAreaPicker(prev => !prev)}
+              className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 rounded-lg font-bold text-[10px] sm:text-[11px] flex items-center gap-1 cursor-pointer transition-all shadow-xs"
+              title="Select your neighborhood if GPS is off or approximate"
+            >
+              <span>{showAreaPicker ? '✕ Close' : '✏️ Change Area'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                setIsLocating(true);
+                try {
+                  await requestGeolocation(false);
+                } finally {
+                  setIsLocating(false);
+                }
+              }}
+              disabled={isLocating}
+              className="text-red-700 hover:text-red-900 font-bold underline flex items-center gap-1 cursor-pointer disabled:opacity-60 text-[10px] sm:text-[11px]"
+              title="Detect and refresh GPS location"
+            >
+              {isLocating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              <span>{isLocating ? 'Detecting...' : '🔄 Refresh GPS'}</span>
+            </button>
+          </div>
         </div>
+
+        {/* Quick Area Picker Dropdown / Drawer */}
+        {showAreaPicker && (
+          <div className="bg-amber-50/95 border-b border-amber-200 p-3 sm:p-4 text-xs animate-in slide-in-from-top-2 duration-150">
+            <div className="flex items-center justify-between mb-2">
+              <span className="font-bold text-amber-950 flex items-center gap-1.5 text-[11px] sm:text-xs">
+                <span>📍</span> আপনার এলাকা নির্বাচন করুন (1-Tap Dispatch Update):
+              </span>
+              <span className="text-[10px] text-amber-800">কাছের হাসপাতাল ও অ্যাম্বুলেন্স দ্রুত আপডেট হবে</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-h-48 overflow-y-auto pr-1">
+              {POPULAR_BANGLADESH_AREAS.map((area) => (
+                <button
+                  key={area.name}
+                  type="button"
+                  onClick={() => {
+                    setUserCustomLocation(area.lat, area.lng, area.name);
+                    setShowAreaPicker(false);
+                  }}
+                  className="px-2.5 py-1.5 bg-white hover:bg-red-50 hover:border-red-400 border border-amber-200 rounded-lg text-slate-800 text-[11px] font-medium text-left truncate transition-colors cursor-pointer active:scale-95"
+                  title={area.name}
+                >
+                  {area.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* STEP 1: What do you need? */}
         {step === 'select' && (
@@ -438,11 +540,14 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               {/* Real Location Navigation Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}`}
+                  href={assignedInfo?.lat && assignedInfo?.lng
+                    ? `https://www.google.com/maps/dir/?api=1&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
+                    : '#'
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="py-2 sm:py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center"
-                  title="Open live Google Maps turn-by-turn directions"
+                  title="Open live Google Maps turn-by-turn directions from your phone's GPS"
                 >
                   <Navigation className="w-3.5 h-3.5 text-blue-600" />
                   <span>Google Maps GPS Navigation</span>

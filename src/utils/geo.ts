@@ -32,149 +32,99 @@ export interface GeolocationResult {
   lat: number;
   lng: number;
   accuracy?: number;
-  source: 'gps' | 'network' | 'ip' | 'cached';
+  source: 'gps' | 'network' | 'cached';
   errorMessage?: string;
   isFallback?: boolean;
 }
 
 /**
- * IP-based location fallback for situations where browser geolocation fails,
- * permissions are denied, or when running over insecure HTTP on Android Chrome.
+ * Common Bangladesh Emergency Areas for instant 1-tap selection and manual overrides.
  */
-export async function fetchIpLocation(): Promise<GeolocationResult | null> {
-  // Service 1: ipwho.is (fast, no key required, good BD coverage)
-  try {
-    const res = await fetch('https://ipwho.is/', {
-      signal: AbortSignal.timeout(3500),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.success && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-        return {
-          lat: data.latitude,
-          lng: data.longitude,
-          source: 'ip',
-          isFallback: true,
-        };
-      }
-    }
-  } catch {
-    // try secondary IP service
-  }
-
-  // Service 2: freeipapi.com
-  try {
-    const res = await fetch('https://freeipapi.com/api/json', {
-      signal: AbortSignal.timeout(3500),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
-        return {
-          lat: data.latitude,
-          lng: data.longitude,
-          source: 'ip',
-          isFallback: true,
-        };
-      }
-    }
-  } catch {
-    // silent failure
-  }
-
-  return null;
-}
+export const POPULAR_BANGLADESH_AREAS = [
+  { name: 'Panthapath / Central Dhaka', lat: 23.7500, lng: 90.3850, division: 'Dhaka' },
+  { name: 'Dhanmondi, Dhaka', lat: 23.7465, lng: 90.3760, division: 'Dhaka' },
+  { name: 'Mirpur (1-14), Dhaka', lat: 23.8041, lng: 90.3665, division: 'Dhaka' },
+  { name: 'Uttara, Dhaka', lat: 23.8759, lng: 90.3795, division: 'Dhaka' },
+  { name: 'Gulshan / Banani, Dhaka', lat: 23.7925, lng: 90.4078, division: 'Dhaka' },
+  { name: 'Mohammadpur, Dhaka', lat: 23.7662, lng: 90.3588, division: 'Dhaka' },
+  { name: 'Badda / Rampura, Dhaka', lat: 23.7684, lng: 90.4255, division: 'Dhaka' },
+  { name: 'Motijheel / Paltan, Dhaka', lat: 23.7330, lng: 90.4172, division: 'Dhaka' },
+  { name: 'Old Dhaka / Sadarghat', lat: 23.7104, lng: 90.4074, division: 'Dhaka' },
+  { name: 'Agrabad / Panchlaish, Chittagong', lat: 22.3569, lng: 91.7832, division: 'Chittagong' },
+  { name: 'Zindabazar, Sylhet', lat: 24.8949, lng: 91.8687, division: 'Sylhet' },
+  { name: 'Shaheb Bazar, Rajshahi', lat: 24.3636, lng: 88.6241, division: 'Rajshahi' },
+  { name: 'Shibbari, Khulna', lat: 22.8456, lng: 89.5403, division: 'Khulna' },
+  { name: 'Sadar Road, Barisal', lat: 22.7010, lng: 90.3535, division: 'Barisal' },
+  { name: 'Medical Mor, Rangpur', lat: 25.7439, lng: 89.2752, division: 'Rangpur' },
+];
 
 /**
- * Android-optimized multi-tier location retrieval.
- * On Android, enableHighAccuracy: true often fails or times out indoors because
- * satellite acquisition takes >15s. This function tries high-accuracy first with
- * reasonable timeout, and immediately falls back to network/Wi-Fi positioning (enableHighAccuracy: false)
- * which succeeds in <1s on Android Google Play Services.
+ * Android & Mobile-optimized multi-tier location retrieval.
+ * On Android mobile devices:
+ * 1. Fast network/cell-tower positioning is attempted first (enableHighAccuracy: false).
+ *    Google Play Services returns this in <500ms using Wi-Fi / cell triangulation.
+ * 2. High accuracy GPS (enableHighAccuracy: true) is attempted next with 10s timeout.
+ * 
+ * Note: We explicitly DO NOT use IP-based geolocation in Bangladesh, because local ISPs
+ * route all cellular and broadband traffic through central Old Dhaka / Tanti Bazar gateways,
+ * which falsely assigns users across Bangladesh to Sadarghat/Tanti Bazar.
  */
 export async function getGeolocationWithFallbacks(): Promise<GeolocationResult> {
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
-    const ipRes = await fetchIpLocation();
-    if (ipRes) return ipRes;
     throw new Error('Geolocation is not supported by your browser.');
   }
 
-  // Check for insecure context on mobile browsers (Android Chrome strictly blocks GPS on HTTP)
-  const isSecure = typeof window !== 'undefined'
-    ? (window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-    : true;
-
-  if (!isSecure) {
-    console.warn('Insecure origin detected on mobile. Browser GPS will be blocked. Falling back to IP location.');
-    const ipRes = await fetchIpLocation();
-    if (ipRes) {
-      ipRes.errorMessage = 'Android Chrome requires HTTPS for live device GPS. IP-based location is used.';
-      return ipRes;
-    }
-  }
-
-  // TIER 1: High accuracy GPS attempt (with cache acceptance up to 3 minutes)
-  const tryHighAccuracy = (): Promise<GeolocationPosition> => {
+  // TIER 1: Fast network / cell-tower / Wi-Fi positioning
+  // This responds almost instantaneously on Android devices
+  const tryNetworkPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 7000,
-        maximumAge: 180000,
+        enableHighAccuracy: false,
+        timeout: 6000,
+        maximumAge: 300000, // accept cached location up to 5 minutes
       });
     });
   };
 
-  // TIER 2: Fast network/Wi-Fi positioning (enableHighAccuracy: false, cache up to 10 minutes)
-  // This is the key fix for Android devices where GPS satellite lock is slow or unavailable indoors.
-  const tryNetworkAccuracy = (): Promise<GeolocationPosition> => {
+  // TIER 2: High accuracy satellite GPS
+  const tryHighAccuracyPosition = (): Promise<GeolocationPosition> => {
     return new Promise((resolve, reject) => {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
+        enableHighAccuracy: true,
         timeout: 10000,
-        maximumAge: 600000,
+        maximumAge: 60000,
       });
     });
   };
 
   try {
-    const pos = await tryHighAccuracy();
+    const pos = await tryNetworkPosition();
     return {
       lat: pos.coords.latitude,
       lng: pos.coords.longitude,
       accuracy: pos.coords.accuracy,
-      source: 'gps',
+      source: 'network',
     };
-  } catch (err: unknown) {
-    const geoError = err as GeolocationPositionError;
-    console.warn('High accuracy GPS failed or timed out, trying network positioning fallback...', geoError);
-
-    // If permission was denied by user, high accuracy or low accuracy both fail
-    if (geoError && geoError.code === 1) {
-      const ipRes = await fetchIpLocation();
-      if (ipRes) {
-        ipRes.errorMessage = 'Location permission is denied in browser settings. IP location used.';
-        return ipRes;
-      }
+  } catch (netErr: unknown) {
+    const geoErr = netErr as GeolocationPositionError;
+    if (geoErr && geoErr.code === 1) {
       throw new Error('PERMISSION_DENIED');
     }
 
-    // Try Tier 2: Network / Wi-Fi based location
     try {
-      const pos2 = await tryNetworkAccuracy();
+      const pos = await tryHighAccuracyPosition();
       return {
-        lat: pos2.coords.latitude,
-        lng: pos2.coords.longitude,
-        accuracy: pos2.coords.accuracy,
-        source: 'network',
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        source: 'gps',
       };
-    } catch (err2: unknown) {
-      console.warn('Network location also failed, attempting IP location fallback...', err2);
-      const ipRes = await fetchIpLocation();
-      if (ipRes) {
-        ipRes.errorMessage = 'Device GPS unavailable. Approximate network IP location used.';
-        return ipRes;
+    } catch (gpsErr: unknown) {
+      const gpsGeoErr = gpsErr as GeolocationPositionError;
+      if (gpsGeoErr && gpsGeoErr.code === 1) {
+        throw new Error('PERMISSION_DENIED');
       }
-      throw err2;
+      throw new Error('POSITION_UNAVAILABLE');
     }
   }
 }

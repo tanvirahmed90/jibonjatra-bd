@@ -281,11 +281,11 @@ export const HospitalsView: React.FC = () => {
 
               <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${focusedHospital.lat},${focusedHospital.lng}`}
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${focusedHospital.lat},${focusedHospital.lng}&travelmode=driving`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white text-red-700 hover:bg-rose-50 active:scale-95 text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-2 text-center"
-                  title="Open in native Google Maps"
+                  title="Open live directions in Google Maps"
                 >
                   <Navigation className="w-3.5 h-3.5 text-red-600" />
                   <span>Google Maps GPS Route</span>
