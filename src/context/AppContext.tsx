@@ -119,8 +119,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [ambulances, setAmbulances] = useState<Ambulance[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_ambulances_v5');
-    return saved ? JSON.parse(saved) : INITIAL_AMBULANCES;
+    const saved = localStorage.getItem('jibonjatra_ambulances_v8');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length >= INITIAL_AMBULANCES.length) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_AMBULANCES;
   });
 
   const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequest[]>(() => {
@@ -186,7 +196,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [donors]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_ambulances_v5', JSON.stringify(ambulances));
+    localStorage.setItem('jibonjatra_ambulances_v8', JSON.stringify(ambulances));
   }, [ambulances]);
 
   useEffect(() => {
