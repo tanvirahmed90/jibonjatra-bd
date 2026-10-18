@@ -104,7 +104,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   });
 
   const [donors, setDonors] = useState<BloodDonor[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_donors_v9');
+    const saved = localStorage.getItem('jibonjatra_donors_v10');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -182,7 +182,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [hospitals]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_donors_v9', JSON.stringify(donors));
+    localStorage.setItem('jibonjatra_donors_v10', JSON.stringify(donors));
   }, [donors]);
 
   useEffect(() => {
