@@ -77,13 +77,18 @@ export const HomeView: React.FC = () => {
 
   return (
     <div className="space-y-10 sm:space-y-14">
-      {/* 1. HERO SECTION */}
-      <section className="relative overflow-hidden pt-8 pb-10 sm:py-16 px-4 rounded-3xl bg-gradient-to-b from-red-50/70 via-white to-[#F7F9FC] border border-red-100/80 shadow-card-soft text-center">
-        {/* Subtle decorative emergency pulse ring in background */}
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-red-500/5 rounded-full blur-3xl pointer-events-none"></div>
+      {/* 1. HERO SECTION WITH BACKGROUND IMAGE */}
+      <section className="relative overflow-hidden rounded-3xl border border-slate-200/80 shadow-card-soft text-center py-12 sm:py-20 px-4 sm:px-8">
+        {/* Background Image */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat transform scale-105"
+          style={{ backgroundImage: `url('/hero-banner.png')` }}
+        />
+        {/* Elegant overlay to highlight background while ensuring maximum readability */}
+        <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/92 backdrop-blur-[1px]" />
 
         <div className="max-w-3xl mx-auto space-y-4 relative z-10">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-100/90 text-red-700 text-xs font-bold border border-red-200">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-100/90 text-red-700 text-xs font-bold border border-red-200 backdrop-blur-sm shadow-sm">
             <span className="w-2 h-2 rounded-full bg-red-600 animate-ping"></span>
             <span>Bangladesh Emergency Lifesaving Network</span>
           </div>
@@ -95,7 +100,7 @@ export const HomeView: React.FC = () => {
             </span>
           </h1>
 
-          <p className="text-base sm:text-xl text-slate-600 max-w-2xl mx-auto font-normal leading-relaxed">
+          <p className="text-base sm:text-xl text-slate-700 max-w-2xl mx-auto font-medium leading-relaxed">
             Find nearby hospitals, blood donors, ambulances and emergency facilities quickly across Bangladesh.
           </p>
 
