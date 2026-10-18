@@ -42,7 +42,7 @@
   - কাস্টম ইমার্জেন্সি কালার প্যালেট (`primary: #D32F2F`, `secondary: #1976D2`, `success: #2E7D32`)।
   - ইমার্জেন্সি পালস ও বীকন অ্যানিমেশন (`pulse-fast`, `beacon`, `siren`)।
 - **PostCSS & Autoprefixer:** সিএসএস প্রসেসিং ও ব্রাউজার কম্প্যাটিবিলিটির জন্য।
-- **Google Fonts:** `Outfit` (হেডিংয়ের জন্য) এবং `Plus Jakarta Sans` (বডির জন্য)।
+- **Google Fonts:** `Inter` (হেডিংয়ের জন্য) এবং `Plus Jakarta Sans` (বডির জন্য)।
 
 ### আইকন ও ইউআই কম্পোনেন্ট (Icons & UI)
 - **Lucide React:** আধুনিক ও পরিষ্কার মেডিকেল ও নেভিগেশন আইকন (যেমন: `Ambulance`, `HeartHandshake`, `MapPin`, `Phone`, `ShieldAlert`, ইত্যাদি)।

@@ -20,7 +20,7 @@ The facility registry is aligned with the **Government of the People's Republic 
 - **Success (Available Green):** `#2E7D32` — Available ICU/NICU beds, ready ambulances, active donors.
 - **Warning (Alert Amber):** `#F57C00` — Limited bed availability, high demand.
 - **Background (Clean Hospital Slate):** `#F7F9FC`
-- **Typography:** Outfit (Display/Headings) & Plus Jakarta Sans (Clean Body)
+- **Typography:** Inter (Display/Headings) & Plus Jakarta Sans (Clean Body)
 - **Icons:** Modern Lucide React icon set
 - **Accessibility:** Multi-attribute status indicators (`🟢 Available`, `🟡 Limited`, `🔴 Full/Unavailable`, `⚪ Unknown`), high contrast, aria labels, and large touch targets.
 
