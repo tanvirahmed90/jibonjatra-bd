@@ -7,7 +7,7 @@ export const AmbulanceDashboard: React.FC = () => {
   const { ambulances, updateAmbulanceProfile, updateAmbulanceStatus, currentUser } = useApp();
 
   const myAmbulance: Ambulance =
-    ambulances.find(a => a.id === currentUser.ambulanceId || a.phone === currentUser.phone) ||
+    (currentUser && ambulances.find(a => a.id === currentUser.ambulanceId || a.phone === currentUser.phone)) ||
     ambulances[0];
 
   // Specific state fields requested by user:
@@ -15,13 +15,13 @@ export const AmbulanceDashboard: React.FC = () => {
   // 2. Driver Phone Number (ড্রাইভারের নম্বর - phone)
   // 3. Current Location (বর্তমান লোকেশন - locationName)
   const [regNumber, setRegNumber] = useState<string>(
-    currentUser.regNumber || myAmbulance.regNumber || 'Dhaka Metro-Cha-11-2024'
+    currentUser?.regNumber || myAmbulance?.regNumber || 'Dhaka Metro-Cha-11-2024'
   );
   const [phone, setPhone] = useState<string>(
-    currentUser.phone || myAmbulance.phone || '+880 1711 991122'
+    currentUser?.phone || myAmbulance?.phone || '+880 1711 991122'
   );
   const [locationName, setLocationName] = useState<string>(
-    currentUser.locationName || myAmbulance.locationName || 'Panthapath Standby Point, Dhaka'
+    currentUser?.locationName || myAmbulance?.locationName || 'Panthapath Standby Point, Dhaka'
   );
 
   const [status, setStatus] = useState(myAmbulance.status);
@@ -60,7 +60,7 @@ export const AmbulanceDashboard: React.FC = () => {
           </div>
 
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white">
-            {currentUser.name || myAmbulance.driverName}
+            {currentUser?.name || myAmbulance.driverName}
           </h2>
 
           <p className="text-xs sm:text-sm text-amber-100 mt-1 font-mono flex items-center gap-2">

@@ -7,6 +7,7 @@ import { EmergencyRequestModal } from './components/EmergencyRequestModal';
 import { HospitalDetailsModal } from './components/HospitalDetailsModal';
 import { DonorRegisterModal } from './components/DonorRegisterModal';
 import { AuthModal } from './components/AuthModal';
+import { LocationPickerModal } from './components/LocationPickerModal';
 
 import { HomeView } from './views/HomeView';
 import { HospitalsView } from './views/HospitalsView';
@@ -28,6 +29,8 @@ const MainContent: React.FC = () => {
     setIsDonorModalOpen,
     isAuthModalOpen,
     setIsAuthModalOpen,
+    isLocationModalOpen,
+    setIsLocationModalOpen,
     toastMessage,
   } = useApp();
 
@@ -42,6 +45,9 @@ const MainContent: React.FC = () => {
       case 'ambulance':
         return <AmbulanceView />;
       case 'dashboard':
+        if (!currentUser) {
+          return <HomeView />;
+        }
         if (currentUser.role === 'ambulance') {
           return <AmbulanceDashboard />;
         }
@@ -50,6 +56,9 @@ const MainContent: React.FC = () => {
         }
         return <DonorDashboard />;
       case 'admin':
+        if (!currentUser || currentUser.role !== 'admin') {
+          return <HomeView />;
+        }
         return <AdminDashboard />;
       default:
         return <HomeView />;
@@ -99,6 +108,11 @@ const MainContent: React.FC = () => {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
+      />
+
+      <LocationPickerModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
       />
     </div>
   );

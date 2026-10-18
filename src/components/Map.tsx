@@ -13,7 +13,7 @@ interface MapProps {
 }
 
 export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] md:h-[540px]' }) => {
-  const { hospitals, donors, ambulances, userLocation, setSelectedHospital, requestGeolocation, setUserCustomLocation } = useApp();
+  const { hospitals, donors, ambulances, userLocation, setSelectedHospital, requestGeolocation, setUserCustomLocation, setIsLocationModalOpen } = useApp();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersLayerRef = useRef<L.LayerGroup | null>(null);
@@ -340,27 +340,35 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
       {/* Bottom Area Switcher & Location Button */}
       <div className="absolute bottom-3 left-3 right-3 z-[1000] flex items-center justify-between gap-2 pointer-events-none">
-        {/* Quick Area Location Selector */}
-        <div className="pointer-events-auto hidden md:flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-200 text-xs">
-          <span className="text-[11px] font-bold text-slate-500 px-1">Quick Area:</span>
+        {/* Quick Area Location Selector (Horizontal scrolling on both mobile and desktop) */}
+        <div className="pointer-events-auto flex items-center gap-1.5 bg-white/95 backdrop-blur-md p-1.5 rounded-xl shadow-md border border-slate-200 text-xs max-w-[calc(100%-80px)] sm:max-w-xl overflow-x-auto">
+          <button
+            type="button"
+            onClick={() => setIsLocationModalOpen(true)}
+            className="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-[11px] transition-all shrink-0 flex items-center gap-1 shadow-2xs whitespace-nowrap"
+            title="সব জেলা ও এলাকা নির্বাচন করুন"
+          >
+            <span>🗺️ এলাকা</span>
+          </button>
           {[
-            { name: 'Rampura', lat: 23.7610, lng: 90.4208 },
-            { name: 'Banasree', lat: 23.7635, lng: 90.4308 },
+            { name: 'Panthapath', lat: 23.7500, lng: 90.3850 },
             { name: 'Dhanmondi', lat: 23.7461, lng: 90.3742 },
             { name: 'Mirpur', lat: 23.8067, lng: 90.3683 },
-            { name: 'Mohammadpur', lat: 23.7658, lng: 90.3584 },
             { name: 'Uttara', lat: 23.8728, lng: 90.3984 },
             { name: 'Gulshan', lat: 23.7925, lng: 90.4180 },
-            { name: 'Badda', lat: 23.7805, lng: 90.4267 },
-            { name: 'Old Dhaka', lat: 23.7085, lng: 90.4260 },
-            { name: 'Jatrabari', lat: 23.7104, lng: 90.4348 },
-            { name: 'Panthapath', lat: 23.7525, lng: 90.3840 },
+            { name: 'Mohammadpur', lat: 23.7658, lng: 90.3584 },
+            { name: 'Chittagong', lat: 22.3569, lng: 91.7832 },
+            { name: 'Sylhet', lat: 24.8949, lng: 91.8687 },
+            { name: 'Rajshahi', lat: 24.3636, lng: 88.6241 },
+            { name: 'Khulna', lat: 22.8456, lng: 89.5403 },
+            { name: 'Barisal', lat: 22.7010, lng: 90.3535 },
+            { name: 'Rangpur', lat: 25.7439, lng: 89.2752 },
           ].map((area) => (
             <button
               key={area.name}
               type="button"
-              onClick={() => setUserCustomLocation(area.lat, area.lng, `${area.name}, Dhaka`)}
-              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold text-[11px] transition-all shrink-0"
+              onClick={() => setUserCustomLocation(area.lat, area.lng, `${area.name}`)}
+              className="px-2 py-1 rounded-lg bg-slate-100 hover:bg-red-50 hover:text-red-700 text-slate-700 font-semibold text-[11px] transition-all shrink-0 whitespace-nowrap"
             >
               {area.name}
             </button>
@@ -372,11 +380,12 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           type="button"
           onClick={handleMyLocationClick}
           disabled={isLocating}
-          className="pointer-events-auto ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-2 text-xs font-bold"
+          className="pointer-events-auto shrink-0 ml-auto bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 sm:px-3.5 sm:py-2.5 rounded-xl shadow-lg active:scale-95 transition-all flex items-center gap-1.5 text-xs font-bold"
           title="Detect my current location with GPS"
         >
-          <Navigation className={`w-4 h-4 ${isLocating ? 'animate-spin' : ''}`} />
-          <span>{isLocating ? 'Detecting GPS...' : 'My Live Location'}</span>
+          <Navigation className={`w-3.5 h-3.5 ${isLocating ? 'animate-spin' : ''}`} />
+          <span className="hidden sm:inline">{isLocating ? 'GPS...' : 'My Live GPS'}</span>
+          <span className="sm:hidden">{isLocating ? '...' : 'GPS'}</span>
         </button>
       </div>
 

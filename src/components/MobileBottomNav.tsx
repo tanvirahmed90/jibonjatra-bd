@@ -81,8 +81,8 @@ export const MobileBottomNav: React.FC = () => {
           <span className="text-[10px] mt-0.5">Ambulance</span>
         </button>
 
-        {/* Role Dashboard for Hospital Staff / Ambulance Driver / Admin */}
-        {currentUser.role !== 'patient' && (
+        {/* Role Dashboard for Hospital Staff / Ambulance Driver / Admin - ONLY when logged in */}
+        {currentUser && (
           <button
             type="button"
             onClick={() => handleTab(currentUser.role === 'admin' ? 'admin' : 'dashboard')}

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { AlertCircle, Menu, X, User as UserIcon, Shield, Building2, Truck, Droplet, HeartPulse, ChevronDown } from 'lucide-react';
+import { AlertCircle, Menu, X, User as UserIcon, Shield, Building2, Truck, Droplet, HeartPulse, ChevronDown, LogOut } from 'lucide-react';
 import { UserRole } from '../types';
 
 export const Navbar: React.FC = () => {
@@ -11,10 +11,12 @@ export const Navbar: React.FC = () => {
     setIsAuthModalOpen,
     currentUser,
     switchUserRole,
+    logout,
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navLinks = [
     { id: 'home', label: 'Home' },
@@ -26,22 +28,24 @@ export const Navbar: React.FC = () => {
   const handleNavClick = (id: string) => {
     setActiveTab(id);
     setMobileMenuOpen(false);
+    setUserMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const getRoleBadge = (role: UserRole) => {
+  const getRoleBadge = (role?: UserRole) => {
     switch (role) {
       case 'ambulance':
         return { label: 'Ambulance Driver', color: 'bg-amber-100 text-amber-800' };
       case 'admin':
         return { label: 'System Admin', color: 'bg-purple-100 text-purple-800' };
       case 'donor':
-      default:
         return { label: 'Blood Donor', color: 'bg-rose-100 text-rose-800' };
+      default:
+        return { label: 'General User', color: 'bg-slate-100 text-slate-800' };
     }
   };
 
-  const currentRoleConfig = getRoleBadge(currentUser.role);
+  const currentRoleConfig = currentUser ? getRoleBadge(currentUser.role) : null;
 
   return (
     <header className="sticky top-0 z-[1100] bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-sm transition-all">
@@ -86,17 +90,19 @@ export const Navbar: React.FC = () => {
               </button>
             ))}
 
-            {/* Dashboards shortcut for active role */}
-            <button
-              onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
-              className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
-                activeTab === 'dashboard' || activeTab === 'admin'
-                  ? 'bg-blue-600 text-white shadow-sm'
-                  : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-              }`}
-            >
-              ⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : currentUser.role === 'ambulance' ? 'Driver Portal' : 'Donor Profile'}
-            </button>
+            {/* Dashboards shortcut for active role - ONLY visible when logged in */}
+            {currentUser && (
+              <button
+                onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
+                className={`px-3.5 py-2 rounded-xl text-sm font-bold transition-all ${
+                  activeTab === 'dashboard' || activeTab === 'admin'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                }`}
+              >
+                ⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : currentUser.role === 'ambulance' ? 'Driver Portal' : 'Donor Profile'}
+              </button>
+            )}
 
             {/* Glowing Emergency Button in Center/Desktop */}
             <button
@@ -110,74 +116,134 @@ export const Navbar: React.FC = () => {
 
           {/* Right: User Role Switcher / Profile / Auth */}
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Role indicator dropdown */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
-                title="Switch View Mode / Role"
-              >
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${currentRoleConfig.color}`}>
-                  {currentRoleConfig.label}
-                </span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-              </button>
+            {currentUser ? (
+              <>
+                {/* Role indicator dropdown for logged-in user */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
+                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
+                    title="Switch View Mode / Role"
+                  >
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${currentRoleConfig?.color}`}>
+                      {currentRoleConfig?.label}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                  </button>
 
-              {roleDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
-                  <div className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1">
-                    Select Profile Role:
-                  </div>
-                  {(['donor', 'ambulance', 'admin'] as UserRole[]).map((r) => {
-                    const label = 
-                      r === 'donor' 
-                        ? '🩸 Blood Donor (রক্তদাতা)' 
-                        : r === 'ambulance' 
-                        ? '🚑 Ambulance Driver (চালক)' 
-                        : '🛡️ System Admin (অ্যাডমিন)';
-                    return (
+                  {roleDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
+                      <div className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1">
+                        Select Profile Role:
+                      </div>
+                      {(['donor', 'ambulance', 'admin'] as UserRole[]).map((r) => {
+                        const label = 
+                          r === 'donor' 
+                            ? '🩸 Blood Donor (রক্তদাতা)' 
+                            : r === 'ambulance' 
+                            ? '🚑 Ambulance Driver (চালক)' 
+                            : '🛡️ System Admin (অ্যাডমিন)';
+                        return (
+                          <button
+                            key={r}
+                            onClick={() => {
+                              switchUserRole(r);
+                              setRoleDropdownOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
+                              currentUser.role === r
+                                ? 'bg-blue-50 text-blue-700 font-bold'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span>{label}</span>
+                            {currentUser.role === r && <span className="text-blue-600 font-bold">✓</span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Profile Avatar / Menu Dropdown */}
+                <div className="relative">
+                  <button
+                    onClick={() => setUserMenuOpen(!userMenuOpen)}
+                    className="flex items-center gap-2 pl-2 pr-2.5 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer"
+                  >
+                    {currentUser.avatar ? (
+                      <img
+                        src={currentUser.avatar}
+                        alt={currentUser.name}
+                        className="w-7 h-7 rounded-full object-cover border border-red-500"
+                      />
+                    ) : (
+                      <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-slate-700">
+                        <UserIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                    <span className="text-xs font-bold text-slate-800 max-w-[90px] truncate hidden sm:inline">
+                      {currentUser.name.split(' ')[0]}
+                    </span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden sm:inline" />
+                  </button>
+
+                  {userMenuOpen && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
+                      <div className="px-3 py-2 border-b border-slate-100">
+                        <p className="text-xs font-bold text-slate-900 truncate">{currentUser.name}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{currentUser.email || currentUser.phone}</p>
+                      </div>
+
                       <button
-                        key={r}
                         onClick={() => {
-                          switchUserRole(r);
-                          setRoleDropdownOpen(false);
+                          setUserMenuOpen(false);
+                          handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard');
                         }}
-                        className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                          currentUser.role === r
-                            ? 'bg-blue-50 text-blue-700 font-bold'
-                            : 'text-slate-700 hover:bg-slate-50'
-                        }`}
+                        className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 mt-1"
                       >
-                        <span>{label}</span>
-                        {currentUser.role === r && <span className="text-blue-600 font-bold">✓</span>}
+                        <span>⚙️</span>
+                        <span>{currentUser.role === 'admin' ? 'অ্যাডমিন ড্যাশবোর্ড' : currentUser.role === 'ambulance' ? 'ড্রাইভার পোর্টাল' : 'রক্তদাতা প্রোফাইল'}</span>
                       </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
 
-            {/* Profile Avatar / Auth Button */}
-            <button
-              onClick={() => setIsAuthModalOpen(true)}
-              className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-full border border-slate-200 hover:border-slate-300 hover:bg-slate-50 transition-all"
-            >
-              {currentUser.avatar ? (
-                <img
-                  src={currentUser.avatar}
-                  alt={currentUser.name}
-                  className="w-7 h-7 rounded-full object-cover border border-red-500"
-                />
-              ) : (
-                <div className="w-7 h-7 rounded-full bg-slate-200 flex items-center justify-center text-slate-700">
-                  <UserIcon className="w-4 h-4" />
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          setIsAuthModalOpen(true);
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <span>🔄</span>
+                        <span>রোল পরিবর্তন করুন</span>
+                      </button>
+
+                      <div className="border-t border-slate-100 my-1"></div>
+
+                      <button
+                        onClick={() => {
+                          setUserMenuOpen(false);
+                          logout();
+                        }}
+                        className="w-full text-left px-3 py-2 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2 cursor-pointer"
+                      >
+                        <LogOut className="w-3.5 h-3.5" />
+                        <span>লগআউট (Sign Out)</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              )}
-              <span className="text-xs font-bold text-slate-800 max-w-[90px] truncate hidden sm:inline">
-                {currentUser.name.split(' ')[0]}
-              </span>
-            </button>
+              </>
+            ) : (
+              /* Public / Guest: Clean Login or Register Button */
+              <button
+                onClick={() => setIsAuthModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs sm:text-sm shadow-sm hover:shadow transition-all"
+              >
+                <UserIcon className="w-3.5 h-3.5 text-rose-400" />
+                <span>লগইন / রেজিস্টার</span>
+              </button>
+            )}
 
             {/* Mobile Hamburger Menu Toggle */}
             <button
@@ -194,12 +260,14 @@ export const Navbar: React.FC = () => {
       {/* Mobile Drawer Navigation */}
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-slate-200 p-4 space-y-2 animate-in slide-in-from-top-2 duration-150">
-          <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Active Profile:</span>
-            <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${currentRoleConfig.color}`}>
-              {currentRoleConfig.label}
-            </span>
-          </div>
+          {currentUser && currentRoleConfig && (
+            <div className="pb-2 border-b border-slate-100 flex items-center justify-between">
+              <span className="text-xs text-slate-500">Active Profile ({currentUser.name.split(' ')[0]}):</span>
+              <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${currentRoleConfig.color}`}>
+                {currentRoleConfig.label}
+              </span>
+            </div>
+          )}
 
           {navLinks.map((link) => (
             <button
@@ -216,13 +284,37 @@ export const Navbar: React.FC = () => {
             </button>
           ))}
 
-          {currentUser.role !== 'patient' && (
+          {currentUser ? (
+            <>
+              <button
+                onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
+                className="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 flex items-center justify-between"
+              >
+                <span>⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : currentUser.role === 'ambulance' ? 'Driver Portal' : 'Donor Profile'}</span>
+                <span>→</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                className="w-full text-left px-4 py-2.5 rounded-xl text-xs font-bold text-red-600 hover:bg-red-50 flex items-center gap-2"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>লগআউট করুন</span>
+              </button>
+            </>
+          ) : (
             <button
-              onClick={() => handleNavClick(currentUser.role === 'admin' ? 'admin' : 'dashboard')}
-              className="w-full text-left px-4 py-3 rounded-xl text-sm font-bold bg-blue-50 text-blue-700 flex items-center justify-between"
+              onClick={() => {
+                setMobileMenuOpen(false);
+                setIsAuthModalOpen(true);
+              }}
+              className="w-full text-center py-3 rounded-xl bg-slate-900 text-white font-bold text-sm shadow-sm flex items-center justify-center gap-2 mt-1"
             >
-              <span>⚙️ {currentUser.role === 'admin' ? 'Admin Portal' : 'My Dashboard'}</span>
-              <span>→</span>
+              <UserIcon className="w-4 h-4 text-rose-400" />
+              <span>লগইন বা একাউন্ট তৈরি করুন</span>
             </button>
           )}
 

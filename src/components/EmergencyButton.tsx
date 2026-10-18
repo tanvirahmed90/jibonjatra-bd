@@ -13,7 +13,7 @@ export const EmergencyButton: React.FC<EmergencyButtonProps> = ({
   className = '',
   showLocationPrompt = true,
 }) => {
-  const { setIsEmergencyModeOpen, requestGeolocation, userLocation } = useApp();
+  const { setIsEmergencyModeOpen, requestGeolocation, userLocation, setIsLocationModalOpen } = useApp();
   const [isLocating, setIsLocating] = useState(false);
 
   const handleLocationClick = async (e: React.MouseEvent) => {
@@ -50,25 +50,39 @@ export const EmergencyButton: React.FC<EmergencyButtonProps> = ({
       </button>
 
       {showLocationPrompt && (
-        <button
-          type="button"
-          onClick={handleLocationClick}
-          disabled={isLocating}
-          className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-700 hover:text-red-700 bg-white/90 hover:bg-white px-3 py-1.5 rounded-full border border-slate-200/90 shadow-xs transition-colors max-w-[92vw] sm:max-w-md truncate"
-          title="Detect and refresh GPS location"
-        >
-          {isLocating ? (
-            <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-red-600 shrink-0" />
-          ) : (
-            <Navigation className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${userLocation.isLive ? 'text-emerald-600 fill-emerald-600' : 'text-red-600'}`} />
-          )}
-          <span className="truncate">
-            {userLocation.isLive ? '📍 Location Active: ' : '📍 Use my current location: '}
-            <strong className="text-slate-900 font-semibold truncate max-w-[150px] sm:max-w-[220px] inline-block align-bottom">
-              {userLocation.address}
-            </strong>
-          </span>
-        </button>
+        <div className="flex items-center gap-1.5 max-w-[95vw] sm:max-w-md flex-wrap justify-center">
+          <button
+            type="button"
+            onClick={handleLocationClick}
+            disabled={isLocating}
+            className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-slate-700 hover:text-red-700 bg-white/95 hover:bg-white px-3 py-1.5 rounded-full border border-slate-200/90 shadow-2xs transition-colors max-w-[70vw] sm:max-w-xs truncate"
+            title="Detect and refresh GPS location"
+          >
+            {isLocating ? (
+              <Loader2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 animate-spin text-red-600 shrink-0" />
+            ) : (
+              <Navigation className={`w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0 ${userLocation.isLive ? 'text-emerald-600 fill-emerald-600' : 'text-red-600'}`} />
+            )}
+            <span className="truncate">
+              {userLocation.isLive ? '📍 ' : '📍 '}
+              <strong className="text-slate-900 font-bold truncate max-w-[130px] sm:max-w-[180px] inline-block align-bottom">
+                {userLocation.address}
+              </strong>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setIsLocationModalOpen(true);
+            }}
+            className="px-2.5 py-1.5 rounded-full bg-white hover:bg-slate-50 border border-slate-200/90 shadow-2xs text-slate-700 hover:text-red-600 font-bold text-[10px] sm:text-[11px] shrink-0 transition-colors"
+            title="এলাকা পরিবর্তন করুন"
+          >
+            এলাকা বদলান
+          </button>
+        </div>
       )}
     </div>
   );

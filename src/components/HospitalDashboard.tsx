@@ -9,7 +9,7 @@ export const HospitalDashboard: React.FC = () => {
 
   // Find affiliated hospital or fallback to DMCH
   const affiliatedHospital =
-    hospitals.find(h => h.id === currentUser.facilityId) || hospitals[0];
+    (currentUser?.facilityId && hospitals.find(h => h.id === currentUser.facilityId)) || hospitals[0];
 
   const [emergency, setEmergency] = useState<FacilityStatusType>(affiliatedHospital.facilities.emergency);
   const [icu, setIcu] = useState<FacilityStatusType>(affiliatedHospital.facilities.icu);
@@ -68,7 +68,7 @@ export const HospitalDashboard: React.FC = () => {
             <span className="bg-emerald-500/30 text-emerald-200 border border-emerald-400/40 text-xs px-2.5 py-0.5 rounded-full font-bold">
               Staff Portal • Hospital Facility Code #{affiliatedHospital.code}
             </span>
-            <span className="text-xs text-slate-300">Duty Officer: {currentUser.name}</span>
+            <span className="text-xs text-slate-300">Duty Officer: {currentUser?.name || 'Authorized Staff'}</span>
           </div>
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white">
             {affiliatedHospital.name}

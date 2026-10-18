@@ -15,7 +15,7 @@ interface AppContextType {
   donors: BloodDonor[];
   ambulances: Ambulance[];
   emergencyRequests: EmergencyRequest[];
-  currentUser: User;
+  currentUser: User | null;
   userLocation: UserLocation;
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -45,6 +45,9 @@ interface AppContextType {
   requestGeolocation: (silent?: boolean) => Promise<boolean>;
   setUserCustomLocation: (lat: number, lng: number, address: string) => void;
   verifyEntity: (type: 'hospital' | 'donor' | 'ambulance', id: string) => void;
+  isLocationModalOpen: boolean;
+  setIsLocationModalOpen: (open: boolean) => void;
+  logout: () => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
@@ -125,9 +128,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [currentUser, setCurrentUser] = useState<User>(() => {
-    const saved = localStorage.getItem('jibonjatra_current_user') || localStorage.getItem('medirescue_current_user');
-    return saved ? JSON.parse(saved) : INITIAL_USERS[0];
+  const [currentUser, setCurrentUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('jibonjatra_current_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id && parsed.role) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error('Error reading stored user:', e);
+      }
+    }
+    return null;
   });
 
   const [userLocation, setUserLocation] = useState<UserLocation>(() => {
@@ -152,6 +165,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [isDonorModalOpen, setIsDonorModalOpen] = useState<boolean>(false);
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
   const [activeEmergency, setActiveEmergency] = useState<EmergencyRequest | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -180,7 +194,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [emergencyRequests]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_current_user', JSON.stringify(currentUser));
+    if (currentUser) {
+      localStorage.setItem('jibonjatra_current_user', JSON.stringify(currentUser));
+    } else {
+      localStorage.removeItem('jibonjatra_current_user');
+      localStorage.removeItem('medirescue_current_user');
+    }
   }, [currentUser]);
 
   useEffect(() => {
@@ -227,14 +246,22 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const errMsg = (err as Error)?.message;
 
       if (!silent) {
-        if (errMsg === 'PERMISSION_DENIED') {
+        if (errMsg === 'INSECURE_ORIGIN') {
+          showToast('⚠️ মোবাইল ব্রাউজারে GPS কাজ করতে HTTPS আবশ্যক। অনুগ্রহ করে আপনার এলাকা নির্বাচন করুন।');
+          setIsLocationModalOpen(true);
+        } else if (errMsg === 'PERMISSION_DENIED') {
           showToast(
             isAndroid
-              ? '⚠️ লোকেশন পারমিশন বন্ধ আছে। ব্রাউজার সাইট সেটিংসে Location Allow করুন ও ফোনের GPS চালু করুন।'
+              ? '⚠️ ক্রোম ব্রাউজারে লোকেশন পারমিশন ব্লক করা। সাইট সেটিংসে Location Allow করুন অথবা এলাকা বেছে নিন।'
               : '⚠️ লোকেশন পারমিশন বন্ধ আছে। ব্রাউজার সেটিংসে Location চালু করুন।'
           );
+        } else if (errMsg === 'POSITION_UNAVAILABLE') {
+          showToast('⚠️ ফোনের GPS বন্ধ আছে। নোটিফিকেশন বার নামিয়ে Location চালু করুন অথবা এলাকা সিলেক্ট করুন।');
+        } else if (errMsg === 'TIMEOUT') {
+          showToast('⚠️ দুর্বল জিপিএস সিগন্যাল। অনুগ্রহ করে তালিকা থেকে আপনার এলাকা বেছে নিন।');
+          setIsLocationModalOpen(true);
         } else {
-          showToast('⚠️ লাইভ GPS পাওয়া যায়নি। ফোনের GPS চালু করুন অথবা নিচে "Change Area" থেকে আপনার এলাকা সিলেক্ট করুন।');
+          showToast('⚠️ লাইভ GPS পাওয়া যায়নি। ফোনের GPS চালু করুন অথবা নিচে এলাকা নির্বাচন করুন।');
         }
       }
       return false;
@@ -328,7 +355,13 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (found) {
       setCurrentUser(found);
     } else {
-      setCurrentUser(prev => ({ ...prev, role }));
+      setCurrentUser({
+        id: `user-${Date.now()}`,
+        name: `${role.toUpperCase()} User`,
+        email: `${role}@jibonjatra.bd`,
+        phone: '+880 1711 000000',
+        role,
+      });
     }
 
     let targetView = 'ড্যাশবোর্ড';
@@ -348,8 +381,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     }
 
-    const userName = found ? found.name : role;
-    showToast(`লগইন সফল: ${userName} (${targetView}-এ নিয়ে যাওয়া হয়েছে)`);
+    showToast(`সফলভাবে ${targetView}-এ লগইন হয়েছে`);
+  };
+
+  const logout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem('jibonjatra_current_user');
+    localStorage.removeItem('medirescue_current_user');
+    setActiveTab('home');
+    showToast('👋 সফলভাবে লগআউট করা হয়েছে');
   };
 
   const updateDonorProfile = (donorId: string, updates: Partial<BloodDonor>) => {
@@ -367,15 +407,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     // Keep currentUser in sync
-    setCurrentUser(prev => ({
-      ...prev,
-      ...updates,
-      phone: updates.phone || prev.phone,
-      bloodGroup: updates.bloodGroup || prev.bloodGroup,
-      age: updates.age ?? prev.age,
-      area: updates.area || prev.area,
-      lastDonationDate: updates.lastDonationDate || prev.lastDonationDate,
-    }));
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        ...updates,
+        phone: updates.phone || prev.phone,
+        bloodGroup: updates.bloodGroup || prev.bloodGroup,
+        age: updates.age ?? prev.age,
+        area: updates.area || prev.area,
+        lastDonationDate: updates.lastDonationDate || prev.lastDonationDate,
+      };
+    });
 
     showToast('✅ রক্তদাতার তথ্য (বয়স, গ্রুপ, ফোন, এলাকা ও শেষ রক্তদান) সফলভাবে আপডেট হয়েছে!');
   };
@@ -395,12 +438,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     );
 
     // Keep currentUser in sync
-    setCurrentUser(prev => ({
-      ...prev,
-      phone: updates.phone || prev.phone,
-      regNumber: updates.regNumber || prev.regNumber,
-      locationName: updates.locationName || prev.locationName,
-    }));
+    setCurrentUser(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        phone: updates.phone || prev.phone,
+        regNumber: updates.regNumber || prev.regNumber,
+        locationName: updates.locationName || prev.locationName,
+      };
+    });
 
     showToast('✅ অ্যাম্বুলেন্সের গাড়ির নম্বর, ফোন নম্বর ও লোকেশন সফলভাবে আপডেট হয়েছে!');
   };
@@ -559,8 +605,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const newRequest: EmergencyRequest = {
       id: `EMG-${Date.now().toString().slice(-6)}`,
       type,
-      patientName: currentUser.name || 'Emergency Patient',
-      phone: currentUser.phone || '+880 1711 000000',
+      patientName: currentUser?.name || 'Emergency Patient',
+      phone: currentUser?.phone || '+880 1711 000000',
       locationName: userLocation.address,
       lat: userLocation.lat,
       lng: userLocation.lng,
@@ -604,6 +650,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setIsAuthModalOpen,
         isDonorModalOpen,
         setIsDonorModalOpen,
+        isLocationModalOpen,
+        setIsLocationModalOpen,
         activeEmergency,
         setActiveEmergency,
         requestEmergencyAssistance,
@@ -614,6 +662,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         registerDonor,
         registerUserAccount,
         switchUserRole,
+        logout,
         requestGeolocation,
         setUserCustomLocation,
         verifyEntity,

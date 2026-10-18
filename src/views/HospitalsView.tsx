@@ -6,6 +6,7 @@ import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { Map } from '../components/Map';
 import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink, Layers, ArrowRight, Navigation } from 'lucide-react';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
+import { LocationBanner } from '../components/LocationBanner';
 import { TOTAL_FACILITIES_COUNT, DIVISION_WISE_DISTRIBUTION } from '../data/facilityStats';
 import { filterAndRankHospitals } from '../utils/areaSearch';
 import { formatDistance } from '../utils/geo';
@@ -137,6 +138,9 @@ export const HospitalsView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* User Location & Area Control Banner */}
+      <LocationBanner />
 
       {/* 39,437 National Facilities Division Quick Filters */}
       <div className="bg-white rounded-2xl border border-slate-200 p-3 sm:p-4 shadow-card-soft space-y-2.5">

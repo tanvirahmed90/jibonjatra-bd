@@ -6,6 +6,7 @@ import { Map } from '../components/Map';
 import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
+import { LocationBanner } from '../components/LocationBanner';
 import { BANGLADESH_EMERGENCY_HOTLINES } from '../data/mockData';
 import { FacilityDistributionSection } from '../components/FacilityDistributionSection';
 import { filterAndRankHospitals } from '../utils/areaSearch';
@@ -107,6 +108,9 @@ export const HomeView: React.FC = () => {
 
       {/* Safety Disclaimer Banner */}
       <SafetyDisclaimer />
+
+      {/* User Location & Area Control Banner */}
+      <LocationBanner />
 
       {/* 2. EMERGENCY ACTION SECTION: 4 Large Interactive Cards */}
       <section className="space-y-4">

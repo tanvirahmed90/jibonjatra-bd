@@ -19,7 +19,7 @@ export const DonorDashboard: React.FC = () => {
 
   // Find logged-in donor profile
   const myDonor: BloodDonor =
-    donors.find(d => d.id === currentUser.donorId || d.phone === currentUser.phone) ||
+    (currentUser && donors.find(d => d.id === currentUser.donorId || d.phone === currentUser.phone)) ||
     donors[0];
 
   // Specific state fields requested by user:
@@ -28,12 +28,12 @@ export const DonorDashboard: React.FC = () => {
   // 3. Phone Number (ফোন নম্বর)
   // 4. Location / Area (লোকেশন)
   // 5. Last Donation Date (সর্বশেষ রক্তদানের তারিখ)
-  const [age, setAge] = useState<number>(myDonor.age || currentUser.age || 26);
-  const [bloodGroup, setBloodGroup] = useState<BloodGroup>(myDonor.bloodGroup || (currentUser.bloodGroup as BloodGroup) || 'O+');
-  const [phone, setPhone] = useState<string>(myDonor.phone || currentUser.phone || '+880 1712 345678');
-  const [area, setArea] = useState<string>(myDonor.area || currentUser.area || 'Dhanmondi, Dhaka');
+  const [age, setAge] = useState<number>(myDonor.age || currentUser?.age || 26);
+  const [bloodGroup, setBloodGroup] = useState<BloodGroup>(myDonor.bloodGroup || (currentUser?.bloodGroup as BloodGroup) || 'O+');
+  const [phone, setPhone] = useState<string>(myDonor.phone || currentUser?.phone || '+880 1712 345678');
+  const [area, setArea] = useState<string>(myDonor.area || currentUser?.area || 'Dhanmondi, Dhaka');
   const [lastDonationDate, setLastDonationDate] = useState<string>(
-    myDonor.lastDonationDate || currentUser.lastDonationDate || '2026-04-12'
+    myDonor.lastDonationDate || currentUser?.lastDonationDate || '2026-04-12'
   );
   const [available, setAvailable] = useState<boolean>(myDonor.available ?? true);
 
@@ -83,7 +83,7 @@ export const DonorDashboard: React.FC = () => {
           </div>
 
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white flex items-center gap-2">
-            <span>{currentUser.name || myDonor.name}</span>
+            <span>{currentUser?.name || myDonor.name}</span>
             <span className="text-sm bg-white text-rose-700 font-extrabold px-2.5 py-0.5 rounded-lg shadow-sm">
               {bloodGroup}
             </span>
