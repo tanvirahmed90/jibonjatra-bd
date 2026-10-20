@@ -7,7 +7,7 @@ interface LocationBannerProps {
 }
 
 export const LocationBanner: React.FC<LocationBannerProps> = ({ className = '' }) => {
-  const { userLocation, requestGeolocation, setIsLocationModalOpen } = useApp();
+  const { userLocation, requestGeolocation, setIsLocationModalOpen, isLiveMapSyncing, liveHospitalsCount } = useApp();
   const [isLocating, setIsLocating] = useState(false);
 
   const handleLiveGPS = async () => {
@@ -42,6 +42,16 @@ export const LocationBanner: React.FC<LocationBannerProps> = ({ className = '' }
               }`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${userLocation.isLive ? 'bg-emerald-600 animate-ping' : 'bg-amber-600'}`}></span>
                 {userLocation.isLive ? 'লাইভ GPS সক্রিয়' : 'ডিফল্ট লোকেশন'}
+              </span>
+
+              {/* Real Map Auto-Sync Indicator */}
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1 bg-blue-50 text-blue-700 border border-blue-200">
+                <span className={`w-1.5 h-1.5 rounded-full ${isLiveMapSyncing ? 'bg-blue-600 animate-ping' : 'bg-blue-500'}`}></span>
+                {isLiveMapSyncing
+                  ? 'ম্যাপ থেকে লাইভ খোঁজা হচ্ছে...'
+                  : liveHospitalsCount > 0
+                  ? `রিয়েল ম্যাপ অটো-সিঙ্ক (${liveHospitalsCount} নতুন)`
+                  : 'লাইভ ম্যাপ অটো-ডিটেক্ট সক্রিয়'}
               </span>
             </div>
 

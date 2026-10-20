@@ -541,12 +541,19 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
                 <a
                   href={assignedInfo?.lat && assignedInfo?.lng
-                    ? `https://www.google.com/maps/dir/?api=1&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
-                    : '#'
+                    ? `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
+                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignedInfo?.name || 'hospital')}`
                   }
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="py-2 sm:py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center"
+                  onClick={(e) => {
+                    const navUrl = (assignedInfo?.lat && assignedInfo?.lng)
+                      ? `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
+                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignedInfo?.name || 'hospital')}`;
+                    window.open(navUrl, '_blank', 'noopener,noreferrer');
+                    e.preventDefault();
+                  }}
+                  className="py-2 sm:py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center cursor-pointer"
                   title="Open live Google Maps turn-by-turn directions from your phone's GPS"
                 >
                   <Navigation className="w-3.5 h-3.5 text-blue-600" />

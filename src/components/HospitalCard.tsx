@@ -3,6 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, Wind } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
+import { useApp } from '../context/AppContext';
 
 interface HospitalCardProps {
   hospital: Hospital;
@@ -10,8 +11,9 @@ interface HospitalCardProps {
 }
 
 export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDetails }) => {
+  const { userLocation } = useApp();
   const getDirectionsUrl = () => {
-    return `https://www.google.com/maps/dir/?api=1&destination=${hospital.lat},${hospital.lng}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`;
   };
 
   return (
@@ -32,13 +34,18 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
           <span>{formatDistance(hospital.distanceKm)}</span>
         </div>
 
-        {/* Verified Facility Badge */}
-        {hospital.mohfwVerified && (
+        {/* Verified Facility Badge or Live Map Sync Badge */}
+        {hospital.id.startsWith('live-osm-') ? (
+          <div className="absolute top-3 right-3 bg-blue-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1.5" title="Live Auto-discovered Hospital from GPS Map">
+            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse"></span>
+            <span>Live Map Sync</span>
+          </div>
+        ) : hospital.mohfwVerified ? (
           <div className="absolute top-3 right-3 bg-emerald-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1" title="Verified Emergency Hospital Facility">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
             <span>Verified Facility</span>
           </div>
-        )}
+        ) : null}
 
         {/* Name and Rating overlay */}
         <div className="absolute bottom-2.5 left-3 right-3 text-white">

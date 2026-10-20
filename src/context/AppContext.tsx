@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, UserRole } from '../types';
 import { INITIAL_HOSPITALS, INITIAL_BLOOD_DONORS, INITIAL_AMBULANCES, INITIAL_USERS } from '../data/mockData';
 import { calculateDistanceKm, getGeolocationWithFallbacks } from '../utils/geo';
+import { fetchLiveNearbyHospitals, mergeWithLiveHospitals } from '../utils/liveMapService';
+
 
 interface UserLocation {
   lat: number;
@@ -47,6 +49,9 @@ interface AppContextType {
   verifyEntity: (type: 'hospital' | 'donor' | 'ambulance', id: string) => void;
   isLocationModalOpen: boolean;
   setIsLocationModalOpen: (open: boolean) => void;
+  isLiveMapSyncing: boolean;
+  liveHospitalsCount: number;
+  syncLiveNearbyHospitals: (lat?: number, lng?: number) => Promise<void>;
   logout: () => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
@@ -87,9 +92,9 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load or initialize state with localStorage backup (v7 includes 500+ DGHS facilities nationwide)
+  // Load or initialize state with localStorage backup (v8 includes full DGHS + real map hospitals)
   const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals_v7');
+    const saved = localStorage.getItem('jibonjatra_hospitals_v8');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -178,6 +183,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
   const [activeEmergency, setActiveEmergency] = useState<EmergencyRequest | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isLiveMapSyncing, setIsLiveMapSyncing] = useState<boolean>(false);
+  const [liveHospitalsCount, setLiveHospitalsCount] = useState<number>(0);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -188,7 +195,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals_v7', JSON.stringify(hospitals));
+    localStorage.setItem('jibonjatra_hospitals_v8', JSON.stringify(hospitals));
   }, [hospitals]);
 
   useEffect(() => {
@@ -307,7 +314,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
   }, []);
 
-  // Recalculate distances whenever user location changes
+  const syncLiveNearbyHospitals = async (lat?: number, lng?: number) => {
+    const targetLat = lat ?? userLocation.lat;
+    const targetLng = lng ?? userLocation.lng;
+    setIsLiveMapSyncing(true);
+    try {
+      const liveNearby = await fetchLiveNearbyHospitals(targetLat, targetLng);
+      if (liveNearby && liveNearby.length > 0) {
+        setHospitals(prev => mergeWithLiveHospitals(prev, liveNearby));
+        setLiveHospitalsCount(liveNearby.length);
+      }
+    } catch (err) {
+      console.warn('Live map sync error:', err);
+    } finally {
+      setIsLiveMapSyncing(false);
+    }
+  };
+
+  // Recalculate distances and auto-sync live map hospitals whenever user location changes
   useEffect(() => {
     setHospitals(prev =>
       prev.map(h => ({
@@ -335,7 +359,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         };
       })
     );
-  }, [userLocation]);
+
+    // Auto discover real nearby map facilities
+    syncLiveNearbyHospitals(userLocation.lat, userLocation.lng);
+  }, [userLocation.lat, userLocation.lng]);
 
   const setUserCustomLocation = (lat: number, lng: number, address: string) => {
     setUserLocation({
@@ -676,6 +703,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         requestGeolocation,
         setUserCustomLocation,
         verifyEntity,
+        isLiveMapSyncing,
+        liveHospitalsCount,
+        syncLiveNearbyHospitals,
         toastMessage,
         showToast,
       }}

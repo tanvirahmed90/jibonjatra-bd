@@ -3,6 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { X, Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, AlertTriangle, Bed, HeartPulse } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
+import { useApp } from '../context/AppContext';
 
 interface HospitalDetailsModalProps {
   hospital: Hospital | null;
@@ -10,6 +11,7 @@ interface HospitalDetailsModalProps {
 }
 
 export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hospital, onClose }) => {
+  const { userLocation } = useApp();
   if (!hospital) return null;
 
   const facilitiesList = [
@@ -26,7 +28,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
   ] as const;
 
   const getDirectionsUrl = () => {
-    return `https://www.google.com/maps/dir/?api=1&destination=${hospital.lat},${hospital.lng}`;
+    return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`;
   };
 
   return (
