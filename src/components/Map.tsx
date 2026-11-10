@@ -1,11 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import '@maplibre/maplibre-gl-leaflet';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '../context/AppContext';
 import { Hospital, BloodDonor, Ambulance } from '../types';
 import { Navigation, Layers, ShieldCheck, Phone, ExternalLink } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
+import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/directions';
+
+// Popups are raw HTML strings. Names/addresses come from OpenStreetMap and user registrations,
+// so they must be escaped — otherwise a crafted name like <img onerror=...> runs as script.
+const statusText = (st: string) =>
+  st === 'available' ? '🟢 Available' : st === 'limited' ? '🟡 Limited' : st === 'unavailable' ? '🔴 Full' : '⚪ Unknown';
+
+const esc = (v: unknown): string =>
+  String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
 interface MapProps {
   centerOnHospital?: Hospital | null;
@@ -24,6 +34,8 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
   const [showAmbulances, setShowAmbulances] = useState(true);
   const [showDonors, setShowDonors] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
+  // Bumped on every map pan/zoom so markers are drawn only for the visible area
+  const [viewTick, setViewTick] = useState(0);
 
   // Initialize Leaflet Map with OpenFreeMap Liberty style
   useEffect(() => {
@@ -51,6 +63,22 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
       markersLayerRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
+      // Re-draw visible markers after pan/zoom — but never while a popup is open,
+      // otherwise the popup the user just tapped would be destroyed by the redraw.
+      let popupOpen = false;
+      let pendingRedraw = false;
+      map.on('popupopen', () => { popupOpen = true; });
+      map.on('popupclose', () => {
+        popupOpen = false;
+        if (pendingRedraw) {
+          pendingRedraw = false;
+          setViewTick(t => t + 1);
+        }
+      });
+      map.on('moveend', () => {
+        if (popupOpen) pendingRedraw = true;
+        else setViewTick(t => t + 1);
+      });
     }
 
     return () => {
@@ -98,6 +126,14 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
     layer.clearLayers();
 
+    // PERFORMANCE: previously ~1,300 DOM markers (all hospitals + ambulances + donors in
+    // Bangladesh) were rebuilt on every GPS tick, freezing Android phones. Now only markers
+    // inside the visible map area (+ a margin) are drawn, and popup HTML is built lazily
+    // only when a marker is tapped.
+    const visibleBounds = map.getBounds().pad(0.35);
+    const inView = (lat: number, lng: number) => visibleBounds.contains([lat, lng]);
+    const zoomedOut = map.getZoom() < 10;
+
     // 1. User Location Marker + 5km Nearby Radius Circle
     const userIcon = L.divIcon({
       className: 'custom-user-marker',
@@ -118,7 +154,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             <span>📍 Your Location</span>
             ${userLocation.isLive ? '<span style="background: #DCFCE7; color: #15803D; font-size: 9px; padding: 1px 5px; border-radius: 999px; font-weight: 700;">LIVE GPS</span>' : ''}
           </div>
-          <div style="font-size: 11px; color: #334155; margin-top: 4px; font-weight: 500;">${userLocation.address}</div>
+          <div style="font-size: 11px; color: #334155; margin-top: 4px; font-weight: 500;">${esc(userLocation.address)}</div>
           <div style="font-size: 10px; color: #64748B; margin-top: 3px;">Showing nearby hospitals within immediate radius.</div>
         </div>
       `);
@@ -139,6 +175,10 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     if (showHospitals) {
       hospitalMarkersRef.current = {};
       hospitals.forEach(hosp => {
+        const isFocusedTarget = centerOnHospital?.id === hosp.id;
+        // Coarse (city/district-level) coordinates would put the pin in the wrong place
+        if (hosp.locationPrecision === 'city' || hosp.locationPrecision === 'district') return;
+        if (!isFocusedTarget && (!inView(hosp.lat, hosp.lng) || (zoomedOut && hosp.distanceKm > 5))) return;
         const isNearby = hosp.distanceKm <= 5;
         const isFocused = centerOnHospital?.id === hosp.id;
 
@@ -157,30 +197,32 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: isFocused ? [0, -21] : [0, -17],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 230px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
               <span style="font-size: 10px; background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
-                ${hosp.type}
+                ${esc(hosp.type)}
               </span>
               <span style="font-size: 11px; color: ${isNearby ? '#15803D' : '#475569'}; font-weight: 800;">
                 ${isNearby ? '🟢 ' : ''}${formatDistance(hosp.distanceKm)}
               </span>
             </div>
-            <h4 style="margin: 4px 0 2px; font-size: 14px; font-weight: 800; color: #0F172A; line-height: 1.2;">${hosp.name}</h4>
-            ${hosp.banglaName ? `<div style="font-size: 11px; color: #64748B; margin-bottom: 3px;">${hosp.banglaName}</div>` : ''}
-            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${hosp.address}</div>
+            <h4 style="margin: 4px 0 2px; font-size: 14px; font-weight: 800; color: #0F172A; line-height: 1.2;">${esc(hosp.name)}</h4>
+            ${hosp.banglaName ? `<div style="font-size: 11px; color: #64748B; margin-bottom: 3px;">${esc(hosp.banglaName)}</div>` : ''}
+            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${esc(hosp.address)}</div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px; background: #F8FAFC; padding: 6px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #E2E8F0;">
-              <div>Emergency: <strong>${hosp.facilities.emergency === 'available' ? '🟢 24/7' : '🟡 Limited'}</strong></div>
-              <div>ICU: <strong>${hosp.facilities.icu === 'available' ? '🟢 Available' : hosp.facilities.icu === 'limited' ? '🟡 Limited' : '🔴 Full'}</strong></div>
+              ${hosp.statusUpdatedAt
+                ? `<div>Emergency: <strong>${statusText(hosp.facilities.emergency)}</strong></div>
+                   <div>ICU: <strong>${statusText(hosp.facilities.icu)}</strong></div>`
+                : '<div style="grid-column: span 2;">ICU/বেড: রওনা দেওয়ার আগে ফোন করে নিশ্চিত হোন</div>'}
             </div>
 
             <div style="display: flex; gap: 6px;">
-              <a href="tel:${hosp.emergencyHotline}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
-                📞 Call Hotline
+              <a href="${hosp.emergencyHotline ? `tel:${esc(hosp.emergencyHotline)}` : esc(getPlaceSearchUrl(hosp))}" ${hosp.emergencyHotline ? '' : 'target="_blank" rel="noopener noreferrer"'} style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
+                📞 ${hosp.emergencyHotline ? 'Call' : 'নম্বর দেখুন'}
               </a>
-              <a href="https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hosp.lat},${hosp.lng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
+              <a href="${esc(getDirectionsUrl(hosp))}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
                 🗺️ Directions
               </a>
             </div>
@@ -198,10 +240,11 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     // 3. Ambulances Markers (Yellow/Orange vehicle beacon)
     if (showAmbulances) {
       ambulances.forEach(amb => {
+        if (!inView(amb.lat, amb.lng) || zoomedOut) return;
         const ambIcon = L.divIcon({
           className: 'custom-amb-marker',
           html: `
-            <div style="background: ${amb.status === 'available' ? '#16A34A' : '#EA580C'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
+            <div style="background: ${amb.status === 'available' ? '#16A34A' : amb.status === 'unknown' ? '#64748B' : '#EA580C'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
               🚑
             </div>
           `,
@@ -210,15 +253,15 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: [0, -14],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 190px; font-family: system-ui; padding: 4px;">
-            <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#B45309'}; font-weight: bold;">
-              ${amb.status === 'available' ? '🟢 Available' : '🟡 Busy'} • ETA: ${amb.etaMinutes}m
+            <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#475569'}; font-weight: bold;">
+              ${amb.status === 'available' ? '🟢 Available' : amb.status === 'busy' ? '🟡 Busy' : amb.status === 'offline' ? '⚫ Offline' : '📋 কল করে নিশ্চিত হোন'} • ~${amb.etaMinutes}m
             </div>
-            <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${amb.providerName}</h4>
-            <div style="font-size: 11px; color: #64748B;">${amb.vehicleType} • ${formatDistance(amb.distanceKm)}</div>
-            <a href="tel:${amb.phone}" style="display: block; margin-top: 6px; background: #DC2626; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
-              📞 Call Ambulance (${amb.phone})
+            <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${esc(amb.providerName)}</h4>
+            <div style="font-size: 11px; color: #64748B;">${esc(amb.vehicleType)} • ${formatDistance(amb.distanceKm)}</div>
+            <a href="tel:${esc(amb.phone)}" style="display: block; margin-top: 6px; background: #DC2626; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+              📞 Call Ambulance (${esc(amb.phone)})
             </a>
           </div>
         `;
@@ -232,11 +275,12 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     // 4. Blood Donors Markers (Red Droplet)
     if (showDonors) {
       donors.filter(d => d.available).forEach(donor => {
+        if (!inView(donor.lat, donor.lng) || zoomedOut) return;
         const donorIcon = L.divIcon({
           className: 'custom-donor-marker',
           html: `
             <div style="background: #E11D48; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.25); cursor: pointer;">
-              ${donor.bloodGroup}
+              ${esc(donor.bloodGroup)}
             </div>
           `,
           iconSize: [26, 26],
@@ -244,16 +288,16 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: [0, -13],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 180px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; gap: 4px;">
               <span style="background: #FFE4E6; color: #BE123C; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 800;">
-                ${donor.bloodGroup}
+                ${esc(donor.bloodGroup)}
               </span>
-              <span style="font-size: 11px; font-weight: bold; color: #1E293B;">${donor.name}</span>
+              <span style="font-size: 11px; font-weight: bold; color: #1E293B;">${esc(donor.name)}</span>
             </div>
-            <div style="font-size: 11px; color: #64748B; margin: 4px 0;">${donor.area} • ${formatDistance(donor.distanceKm)}</div>
-            <a href="tel:${donor.phone}" style="display: block; background: #16A34A; color: white; text-align: center; padding: 5px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+            <div style="font-size: 11px; color: #64748B; margin: 4px 0;">${esc(donor.area)} • ${formatDistance(donor.distanceKm)}</div>
+            <a href="tel:${esc(donor.phone)}" style="display: block; background: #16A34A; color: white; text-align: center; padding: 5px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
               📞 Call Donor
             </a>
           </div>
@@ -264,7 +308,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         layer.addLayer(marker);
       });
     }
-  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors, centerOnHospital]);
+  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors, centerOnHospital, viewTick]);
 
   const handleMyLocationClick = async () => {
     setIsLocating(true);
@@ -313,7 +357,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             />
             <span className="flex items-center gap-1 font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-              Ambulances ({ambulances.filter(a => a.status === 'available').length})
+              Ambulances ({ambulances.length})
             </span>
           </label>
 

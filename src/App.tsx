@@ -1,11 +1,10 @@
-import React from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Footer } from './components/Footer';
 import { EmergencyRequestModal } from './components/EmergencyRequestModal';
 import { HospitalDetailsModal } from './components/HospitalDetailsModal';
-import { DonorRegisterModal } from './components/DonorRegisterModal';
 import { AuthModal } from './components/AuthModal';
 import { LocationPickerModal } from './components/LocationPickerModal';
 
@@ -13,9 +12,10 @@ import { HomeView } from './views/HomeView';
 import { HospitalsView } from './views/HospitalsView';
 import { BloodView } from './views/BloodView';
 import { AmbulanceView } from './views/AmbulanceView';
-import { AmbulanceDashboard } from './components/AmbulanceDashboard';
-import { AdminDashboard } from './components/AdminDashboard';
-import { DonorDashboard } from './components/DonorDashboard';
+// Dashboards are only used by logged-in roles — load their code on demand
+const AmbulanceDashboard = lazy(() => import('./components/AmbulanceDashboard').then(m => ({ default: m.AmbulanceDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const DonorDashboard = lazy(() => import('./components/DonorDashboard').then(m => ({ default: m.DonorDashboard })));
 
 const MainContent: React.FC = () => {
   const {
@@ -32,7 +32,22 @@ const MainContent: React.FC = () => {
     isLocationModalOpen,
     setIsLocationModalOpen,
     toastMessage,
+    openAuthModal,
+    setActiveTab,
   } = useApp();
+
+  // "Become a donor" → donors manage their profile from their own account (real login),
+  // so send logged-in users to their profile and everyone else to registration.
+  useEffect(() => {
+    if (!isDonorModalOpen) return;
+    setIsDonorModalOpen(false);
+    if (currentUser) {
+      setActiveTab('dashboard');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      openAuthModal('register', 'donor');
+    }
+  }, [isDonorModalOpen, currentUser, setIsDonorModalOpen, openAuthModal, setActiveTab]);
 
   const renderActiveView = () => {
     switch (activeTab) {
@@ -80,7 +95,9 @@ const MainContent: React.FC = () => {
 
       {/* Main Page Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 md:pb-12">
-        {renderActiveView()}
+        <Suspense fallback={<div className="py-20 text-center text-sm text-slate-500 animate-pulse">লোড হচ্ছে…</div>}>
+          {renderActiveView()}
+        </Suspense>
       </main>
 
       {/* Footer */}
@@ -100,10 +117,6 @@ const MainContent: React.FC = () => {
         onClose={() => setSelectedHospital(null)}
       />
 
-      <DonorRegisterModal
-        isOpen={isDonorModalOpen}
-        onClose={() => setIsDonorModalOpen(false)}
-      />
 
       <AuthModal
         isOpen={isAuthModalOpen}

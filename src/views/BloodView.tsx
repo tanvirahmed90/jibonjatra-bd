@@ -40,7 +40,7 @@ export const BloodView: React.FC = () => {
       assignedEntityName: donor.name,
       assignedEntityPhone: donor.phone,
     });
-    setRequestSentNotice(`Emergency blood request sent to ${donor.name} (${donor.bloodGroup})! Response expected shortly.`);
+    setRequestSentNotice(`${donor.name}-কে SMS অ্যাপ খোলা হচ্ছে। উত্তর না পেলে সরাসরি কল করুন এবং অন্য দাতাদেরও চেষ্টা করুন।`);
     setTimeout(() => setRequestSentNotice(null), 5000);
   };
 
@@ -59,7 +59,7 @@ export const BloodView: React.FC = () => {
           </h1>
 
           <p className="text-sm text-rose-100 leading-relaxed">
-            Search verified volunteer donors across Dhaka and all Bangladesh divisions during accidents, surgeries, and critical maternal emergencies.
+            Search registered volunteer donors across Dhaka and all Bangladesh divisions during accidents, surgeries, and critical maternal emergencies.
           </p>
 
           <div className="pt-2 flex items-center gap-3 flex-wrap">
@@ -192,11 +192,21 @@ export const BloodView: React.FC = () => {
           <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-sm space-y-3">
             <span className="text-4xl block">🩸</span>
             <h3 className="font-display font-bold text-lg text-slate-800">
-              No matching blood donors found
+              {donors.length === 0 ? 'এখনো কোনো রক্তদাতা রেজিস্টার করেননি' : 'মিল পাওয়া কোনো রক্তদাতা নেই'}
             </h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Try switching blood group filter to ALL, or broaden your selected area.
+              {donors.length === 0
+                ? 'এখানে শুধু নিজে রেজিস্টার করা রক্তদাতারাই দেখান (তাদের অনুমতিসহ)। জরুরি প্রয়োজনে নিকটস্থ হাসপাতালের ব্লাড ব্যাংক বা 16263-এ কল করুন।'
+                : 'রক্তের গ্রুপ ফিল্টার ALL করুন অথবা এলাকা পরিবর্তন করুন।'}
             </p>
+            {donors.length === 0 && (
+              <button
+                onClick={() => setIsDonorModalOpen(true)}
+                className="text-xs bg-slate-900 text-white font-bold px-4 py-2 rounded-xl shadow mt-2 mr-2"
+              >
+                রক্তদাতা হিসেবে রেজিস্টার করুন
+              </button>
+            )}
             <button
               onClick={() => {
                 setSelectedGroup('ALL');

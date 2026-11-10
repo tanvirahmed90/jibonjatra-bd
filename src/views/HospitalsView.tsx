@@ -3,13 +3,14 @@ import { useApp } from '../context/AppContext';
 import { HospitalCard } from '../components/HospitalCard';
 import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
-import { Map } from '../components/Map';
+import { Map } from '../components/LazyMap';
 import { Building2, MapPin, SlidersHorizontal, Map as MapIcon, Grid, ExternalLink, Layers, ArrowRight, Navigation } from 'lucide-react';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
 import { LocationBanner } from '../components/LocationBanner';
 import { TOTAL_FACILITIES_COUNT, DIVISION_WISE_DISTRIBUTION } from '../data/facilityStats';
 import { filterAndRankHospitals } from '../utils/areaSearch';
 import { formatDistance } from '../utils/geo';
+import { getDirectionsUrl } from '../utils/directions';
 
 export const HospitalsView: React.FC = () => {
   const {
@@ -101,9 +102,9 @@ export const HospitalsView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-0.5 rounded">
-              Verified Healthcare Facilities
+              DGHS Registry &amp; Map Facilities
             </span>
-            <span className="text-xs text-slate-500">24/7 Verified Healthcare Network</span>
+            <span className="text-xs text-slate-500">DGHS registry + OpenStreetMap</span>
           </div>
           <h1 className="font-display font-black text-2xl sm:text-4xl text-slate-900">
             Emergency Hospitals & Trauma Centers
@@ -285,7 +286,7 @@ export const HospitalsView: React.FC = () => {
 
               <div className="flex items-center gap-2 self-stretch sm:self-auto shrink-0 flex-wrap">
                 <a
-                  href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${focusedHospital.lat},${focusedHospital.lng}&travelmode=driving`}
+                  href={getDirectionsUrl(focusedHospital)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-white text-red-700 hover:bg-rose-50 active:scale-95 text-xs font-extrabold transition-all shadow-md flex items-center justify-center gap-2 text-center"
@@ -312,7 +313,7 @@ export const HospitalsView: React.FC = () => {
               </div>
             </div>
           )}
-          <Map height="h-[600px]" centerOnHospital={focusedHospital} />
+          <Map eager height="h-[600px]" centerOnHospital={focusedHospital} />
         </div>
       ) : (
         <div>

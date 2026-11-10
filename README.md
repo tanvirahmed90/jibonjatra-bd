@@ -28,101 +28,69 @@ The facility registry is aligned with the **Government of the People's Republic 
 
 ## 🚀 Key Features
 
-### 1. 🚨 Emergency Mode ("GET EMERGENCY HELP")
-- Triggered by a prominent pulsing red button on the hero and floating mobile bottom navigation.
-- Automatically requests browser Geolocation (with fallback to central Dhaka or manual selection).
-- 4 large 1-touch triage buttons:
-  - 🚑 **I Need an Ambulance**
-  - 🩸 **I Need Blood** (with 1-click blood group selector)
-  - 🏥 **I Need a Hospital**
-  - 🏨 **I Need ICU / NICU**
-- Real-time emergency request progression tracker:
-  `Emergency Request Created` ➔ `Searching nearby sector...` ➔ `Resource Assigned` ➔ `Live ETA & Direct Phone Call`.
+### 1. 🚨 Emergency Mode
+- One tap: **Ambulance**, **Blood**, **Hospital**, **ICU/NICU**.
+- Uses the phone's live GPS and shows the **nearest suitable resource to call** — nothing is dispatched automatically.
+- Each request is logged (Supabase) so admins can follow up. For life-threatening emergencies the app always points to **999**.
 
-### 2. 🏥 Hospital Finder & Facility Registry
-- Synced with Bangladesh MOHFW Registry data (DMCH, Square, BSMMU, Suhrawardy, Evercare, Kurmitola, NICVD, CMCH Chittagong, Sylhet MAG Osmani, etc.).
-- Real-time filter panel:
-  - Distance radius slider (2km – 50+ km)
-  - 24/7 Emergency casualty unit available
-  - ICU bed availability
-  - NICU unit available
-  - Blood bank on-site
-  - Central oxygen plant pressure
-  - Administrative division (Dhaka, Chattogram, Sylhet, Rajshahi, Khulna, etc.)
-  - Facility classification (Govt Medical College, Specialized Institute, Private Tertiary, District Hospital, Upazila Health Complex).
-- **Hospital Details Modal**:
-  - Breakdown of **10 critical facilities**: Emergency, ICU, NICU, CCU, HDU, OT, Blood Bank, Oxygen Plant, Ventilator, 24/7 Pharmacy.
-  - Reported Bed Inventory (Available vs Total).
-  - One-tap 📞 **Call Hospital** and 🗺️ **Get Google Maps Directions**.
+### 2. 🏥 Hospital Finder
+- **603 facilities** from the official DGHS facility registry (500) + curated hospitals, plus hospitals discovered live from OpenStreetMap around the user.
+- Registry coordinates are area-level estimates → distances are shown as `~`. **Directions** open Google Maps from the phone's own GPS and search the hospital by name, so navigation lands on the real building.
+- **No invented data:** ICU/NICU/bed availability is shown **only** after an admin confirms it with the hospital (with the confirmation time). Otherwise the card asks the user to call first.
+- Phone numbers: only verified numbers are shown. Without one, the CALL button opens the hospital's Google Maps listing, which carries its current number.
 
-### 3. 🩸 Voluntary Blood Donor Network
-- Search donors across all 8 blood groups: **A+, A-, B+, B-, AB+, AB-, O+, O-**.
-- Area filtering across Dhaka (Dhanmondi, Mirpur, Uttara, Shahbagh, Panthapath, etc.) and divisions.
-- **Privacy First:** Phone numbers are protected/masked until emergency contact is initiated.
-- **Donor Registration Flow:** Allows citizens to sign up with blood group, last donation date, and emergency call consent.
+### 3. 🩸 Blood Donors
+- Only donors who **registered themselves** (with consent to be contacted) are listed.
+- Donors log in, set blood group, area, last donation date and toggle "Available".
 
-### 4. 🚑 24/7 Ambulance Dispatcher
-- Real-time cards showing provider name, vehicle type (ICU Ventilator, AC, Non-AC, Freezing Carrier), distance, and dynamic ETA (e.g. `ETA: 4 minutes`).
-- **"Share My Location"**: 1-click button that formats exact GPS coordinates and landmark address for SMS/WhatsApp sharing with drivers.
-- Direct "📞 CALL NOW" actions.
+### 4. 🚑 Ambulances
+- Public ambulance service listings (call to confirm availability) + driver-registered ambulances, which appear only after **admin verification**, with live Available/Busy/Offline status.
 
-### 5. 🗺️ Interactive Leaflet Map
-- Live markers for:
-  - 📍 User detected location (blue pulsing beacon)
-  - ✚ Hospitals (emergency red markers with facility summary popups)
-  - 🚑 Ambulances (green/amber vehicle icons with live ETA)
-  - 🩸 Blood donors (red blood droplet pins)
-- Layer controls to toggle individual layers.
-- One-click recentering.
+### 5. 🔐 Accounts & Roles (Supabase Auth)
+- Real email + password login, password reset.
+- Self-registration only as **Donor** or **Ambulance**. **Admin** can only be granted in the database.
+- Security is enforced with Postgres Row Level Security (`supabase/schema.sql`).
 
-### 6. ⚙️ Multi-Role Portals & Dashboards
-JibonJatra BD features a 1-click **Quick Role Switcher** in the top navigation:
-- **Citizen / Patient:** Standard emergency assistance and search.
-- **Blood Donor:** Profile management and emergency readiness toggle.
-- **Hospital Staff Dashboard:** Update live emergency triage status, open ICU/NICU beds, ventilator counts, and contact hotlines with automatic "Last updated" timestamps.
-- **Ambulance Driver Dashboard:** Toggle status (`🟢 Available`, `🟡 Busy on Trip`, `🔴 Offline`), update GPS staging point, and ETA.
-- **DGHS Admin Command Dashboard:** Regional bed capacity charts, active emergency logs, and verification approval workflows for new donors and hospitals.
-
-### 7. 📱 Mobile-First Experience
-- Sticky bottom navigation bar with an elevated center emergency trigger.
-- Large touch targets (minimum 48px) designed for high-stress one-hand emergency usage.
+### 6. 🛡️ Admin Panel
+- Verify/unverify donors and ambulances.
+- Update a hospital's ICU/NICU/Emergency/Blood bank/Oxygen status and verified emergency number.
+- See and close emergency requests.
 
 ---
 
-## 🛡️ Safety & Compliance Notice
+## 🗄️ Backend setup (Supabase — free tier)
 
-- JibonJatra BD follows ethical healthcare design standards.
-- Unverified real-time data is explicitly labeled as **"Unknown"** or **"Unverified"**.
-- Timestamps display exact synchronization time (e.g., *"12 mins ago (MOHFW Synced)"*).
-- Prominent disclaimers remind users to call emergency hotlines to confirm bed reservations before transporting critical patients.
+1. Create a free project at <https://supabase.com>.
+2. **SQL Editor → New query** → paste all of [`supabase/schema.sql`](supabase/schema.sql) → **Run**.
+3. **Project Settings → API**: copy the *Project URL* and the *anon public* key.
+4. Locally: copy `.env.example` to `.env.local` and fill both values.
+   On Vercel/Netlify: add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as environment variables and redeploy.
+5. **Authentication → URL Configuration**: set *Site URL* to your live site URL (for the email confirmation / reset links).
+6. Register on the website with your own email, then make yourself admin in the SQL Editor:
+   ```sql
+   update public.profiles set role = 'admin' where email = 'you@example.com';
+   ```
+
+Without these variables the site still works (hospital & ambulance finder, map, directions); login and the donor list show a "setup pending" notice.
 
 ---
 
 ## 💻 Tech Stack
 
-- **Framework:** React 18 with TypeScript
-- **Styling:** Tailwind CSS with custom healthcare palette and animations
-- **Icons:** Lucide React
-- **Mapping:** Leaflet.js with custom DivIcon markers
-- **State & Storage:** Context API with `localStorage` persistence
-- **Bundler:** Vite
+- React 19 + TypeScript, Vite, Tailwind CSS, Lucide icons
+- Leaflet + MapLibre (OpenFreeMap tiles), loaded lazily
+- Supabase (Auth + Postgres + RLS) via plain `fetch` — no extra SDK
+- Static data: `public/data/hospitals.json`, `public/data/ambulances.json` (source CSV in `scripts/data/`)
 
 ---
 
 ## 🛠️ Getting Started Locally
 
 ```bash
-# Clone or navigate to the project directory
-cd "Emergency Healthcare project"
-
-# Install dependencies (already installed)
 npm install
-
-# Start development server
-npm run dev
-
-# Build for production
+cp .env.example .env.local   # optional: add Supabase keys
+npm run dev                  # http://localhost:5173
 npm run build
 ```
 
-Open [http://localhost:5173/](http://localhost:5173/) in your web browser.
+> 📱 To test GPS on an Android phone, open the site over **HTTPS** (Chrome blocks location on plain `http://` LAN addresses). `npm run dev` already serves HTTPS via the basic-ssl plugin.

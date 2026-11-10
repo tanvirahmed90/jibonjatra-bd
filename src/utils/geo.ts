@@ -21,7 +21,13 @@ export function calculateDistanceKm(
   return Math.round(distance * 10) / 10;
 }
 
+/** Used when a facility's coordinates are too coarse (city/district level) to give a real distance */
+export const UNKNOWN_DISTANCE_KM = 9999;
+
 export function formatDistance(distanceKm: number): string {
+  if (distanceKm >= UNKNOWN_DISTANCE_KM) {
+    return 'দূরত্ব অজানা';
+  }
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)} m away`;
   }
@@ -79,18 +85,31 @@ export const POPULAR_BANGLADESH_AREAS: BangladeshArea[] = [
 ];
 
 /**
- * Android & Mobile-optimized multi-tier location retrieval.
- * 1. Checks window.isSecureContext (prevents silent failure on HTTP mobile testing).
- * 2. Checks cached position first (responds in <100ms if Android Google Play Services already has a location).
- * 3. Tries high accuracy GPS with sufficient 12s timeout for mobile satellite fix.
- * 4. Falls back to low-accuracy network/cell positioning if GPS satellite fix is unavailable indoors.
+ * Android & mobile-optimised location retrieval.
+ *
+ * Problems with the old version on Android Chrome:
+ *  - It first accepted ANY cached position up to 5 minutes old with enableHighAccuracy:false.
+ *    On Android that is usually a coarse Wi-Fi/cell fix (500 m – 3 km off), so the app
+ *    locked onto a wrong area and only replaced it if a later fix was <= 100 m.
+ *  - A single getCurrentPosition(highAccuracy) call returns the FIRST fix Android's fused
+ *    provider gives, which is often still coarse while the GPS chip is warming up.
+ *
+ * New strategy: run watchPosition(highAccuracy) for a short window and keep the most
+ * accurate fix. Resolve early once accuracy is good (<= 35 m); otherwise resolve with the
+ * best fix seen when the window ends. If high accuracy produces nothing at all (indoors,
+ * GPS off), fall back to a network position.
  */
-export async function getGeolocationWithFallbacks(): Promise<GeolocationResult> {
+export async function getGeolocationWithFallbacks(
+  options: { maxWaitMs?: number; goodAccuracyM?: number } = {}
+): Promise<GeolocationResult> {
+  const maxWaitMs = options.maxWaitMs ?? 10000;
+  const goodAccuracyM = options.goodAccuracyM ?? 35;
+
   if (typeof navigator === 'undefined' || !navigator.geolocation) {
     throw new Error('NOT_SUPPORTED');
   }
 
-  // Check Secure Context: Chrome on Android blocks navigator.geolocation completely on insecure origins (HTTP IP address)
+  // Chrome on Android blocks geolocation completely on insecure origins (http://192.168.x.x)
   if (typeof window !== 'undefined' && window.isSecureContext === false) {
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
     if (!isLocalhost) {
@@ -98,89 +117,67 @@ export async function getGeolocationWithFallbacks(): Promise<GeolocationResult> 
     }
   }
 
-  // TIER 1: Check fast cached position (up to 5 mins old)
-  const getCachedPosition = (): Promise<GeolocationPosition> => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 2500,
-        maximumAge: 300000,
-      });
-    });
+  const toResult = (pos: GeolocationPosition, source: GeolocationResult['source']): GeolocationResult => ({
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude,
+    accuracy: pos.coords.accuracy,
+    source,
+  });
+
+  const mapError = (err: GeolocationPositionError | null | undefined): Error => {
+    if (err?.code === 1) return new Error('PERMISSION_DENIED');
+    if (err?.code === 3) return new Error('TIMEOUT');
+    return new Error('POSITION_UNAVAILABLE');
   };
 
-  // TIER 2: High accuracy GPS (Fused Location Provider on Android)
-  const getHighAccuracyPosition = (): Promise<GeolocationPosition> => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 0,
-      });
-    });
-  };
+  // Step 1: best high-accuracy fix within the time window
+  const bestHighAccuracy = await new Promise<GeolocationResult>((resolve, reject) => {
+    let best: GeolocationPosition | null = null;
+    let lastError: GeolocationPositionError | null = null;
+    let settled = false;
+    let watchId: number | null = null;
 
-  // TIER 3: Low-power Network/Cell Tower Fallback
-  const getLowAccuracyPosition = (): Promise<GeolocationPosition> => {
-    return new Promise((resolve, reject) => {
-      navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: false,
-        timeout: 8000,
-        maximumAge: Infinity,
-      });
-    });
-  };
-
-  // Try cached first for instantaneous load
-  try {
-    const cached = await getCachedPosition();
-    return {
-      lat: cached.coords.latitude,
-      lng: cached.coords.longitude,
-      accuracy: cached.coords.accuracy,
-      source: 'cached',
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+      clearTimeout(timer);
+      if (best) resolve(toResult(best, best.coords.accuracy <= 100 ? 'gps' : 'network'));
+      else reject(lastError ?? { code: 3 });
     };
-  } catch {
-    // No recent cache, proceed to live satellite/fused positioning
-  }
 
-  // Try high accuracy live GPS
-  try {
-    const pos = await getHighAccuracyPosition();
-    return {
-      lat: pos.coords.latitude,
-      lng: pos.coords.longitude,
-      accuracy: pos.coords.accuracy,
-      source: 'gps',
-    };
-  } catch (err: unknown) {
-    const geoErr = err as GeolocationPositionError;
-    // If user explicitly denied, don't bother trying network
-    if (geoErr && geoErr.code === 1) {
-      throw new Error('PERMISSION_DENIED');
-    }
+    const timer = setTimeout(finish, maxWaitMs);
 
-    // High accuracy timed out or unavailable indoors; try network fallback
     try {
-      const lowPos = await getLowAccuracyPosition();
-      return {
-        lat: lowPos.coords.latitude,
-        lng: lowPos.coords.longitude,
-        accuracy: lowPos.coords.accuracy,
-        source: 'network',
-      };
-    } catch (lowErr: unknown) {
-      const finalErr = lowErr as GeolocationPositionError;
-      if (finalErr && finalErr.code === 1) {
-        throw new Error('PERMISSION_DENIED');
-      }
-      if (finalErr && finalErr.code === 2) {
-        throw new Error('POSITION_UNAVAILABLE');
-      }
-      if (finalErr && finalErr.code === 3) {
-        throw new Error('TIMEOUT');
-      }
-      throw new Error('POSITION_UNAVAILABLE');
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!best || pos.coords.accuracy < best.coords.accuracy) best = pos;
+          if (pos.coords.accuracy <= goodAccuracyM) finish();
+        },
+        (err) => {
+          lastError = err;
+          // Permission denied will never recover inside this window — stop immediately
+          if (err.code === 1) finish();
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: maxWaitMs }
+      );
+    } catch (e) {
+      lastError = e as GeolocationPositionError;
+      finish();
     }
-  }
+  }).catch((err: GeolocationPositionError) => {
+    if (err?.code === 1) throw mapError(err);
+    return null;
+  });
+
+  if (bestHighAccuracy) return bestHighAccuracy;
+
+  // Step 2: network / cell-tower fallback (GPS off or no satellite fix indoors)
+  return new Promise<GeolocationResult>((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve(toResult(pos, 'network')),
+      (err) => reject(mapError(err)),
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
+    );
+  });
 }

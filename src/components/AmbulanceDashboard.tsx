@@ -4,46 +4,40 @@ import { Truck, Phone, CheckCircle2, Clock, MapPin, Radio, ShieldCheck, Save, Ha
 import { Ambulance } from '../types';
 
 export const AmbulanceDashboard: React.FC = () => {
-  const { ambulances, updateAmbulanceProfile, updateAmbulanceStatus, currentUser } = useApp();
+  const { myAmbulance, saveMyAmbulanceProfile, currentUser, userLocation } = useApp();
 
-  const myAmbulance: Ambulance =
-    (currentUser && ambulances.find(a => a.id === currentUser.ambulanceId || a.phone === currentUser.phone)) ||
-    ambulances[0];
-
-  // Specific state fields requested by user:
-  // 1. Car / Vehicle Number (গাড়ির নম্বর - regNumber)
-  // 2. Driver Phone Number (ড্রাইভারের নম্বর - phone)
-  // 3. Current Location (বর্তমান লোকেশন - locationName)
-  const [regNumber, setRegNumber] = useState<string>(
-    currentUser?.regNumber || myAmbulance?.regNumber || 'Dhaka Metro-Cha-11-2024'
+  const [regNumber, setRegNumber] = useState<string>(myAmbulance?.regNumber || '');
+  const [phone, setPhone] = useState<string>(myAmbulance?.phone || currentUser?.phone || '');
+  const [locationName, setLocationName] = useState<string>(myAmbulance?.locationName || '');
+  const [vehicleType, setVehicleType] = useState<Ambulance['vehicleType']>(myAmbulance?.vehicleType || 'AC Ambulance');
+  const [status, setStatus] = useState<Ambulance['status']>(
+    myAmbulance && myAmbulance.status !== 'unknown' ? myAmbulance.status : 'available'
   );
-  const [phone, setPhone] = useState<string>(
-    currentUser?.phone || myAmbulance?.phone || '+880 1711 991122'
-  );
-  const [locationName, setLocationName] = useState<string>(
-    currentUser?.locationName || myAmbulance?.locationName || 'Panthapath Standby Point, Dhaka'
-  );
-
-  const [status, setStatus] = useState(myAmbulance.status);
-  const [eta, setEta] = useState(myAmbulance.etaMinutes || 5);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const handleUpdate = (e: React.FormEvent) => {
+  const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Call updateAmbulanceProfile which updates regNumber, phone, location, status, and currentUser
-    updateAmbulanceProfile(myAmbulance.id, {
-      regNumber,
-      phone,
-      locationName,
-      status,
-      etaMinutes: eta,
-    });
-
-    updateAmbulanceStatus(myAmbulance.id, status, eta);
-
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveMyAmbulanceProfile({
+        regNumber,
+        phone,
+        locationName,
+        vehicleType,
+        status,
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setSaveError((err as Error)?.message || 'সেভ করা যায়নি');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -60,7 +54,7 @@ export const AmbulanceDashboard: React.FC = () => {
           </div>
 
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white">
-            {currentUser?.name || myAmbulance.driverName}
+            {currentUser?.name || myAmbulance?.driverName}
           </h2>
 
           <p className="text-xs sm:text-sm text-amber-100 mt-1 font-mono flex items-center gap-2">
@@ -221,35 +215,37 @@ export const AmbulanceDashboard: React.FC = () => {
             <span className="text-[11px] text-slate-400 block mt-1">অ্যাম্বুলেন্সটি বর্তমানে কোন এলাকায় অবস্থান করছে।</span>
           </div>
 
-          {/* 4. Estimated ETA (মিনিট) */}
+          {/* 4. Vehicle type */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-              ৪. আনুমানিক পৌঁছানোর সময় (Estimated ETA in Mins)
+              ৪. গাড়ির ধরন (Vehicle Type)
             </label>
-            <div className="relative">
-              <Clock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="number"
-                min="1"
-                max="60"
-                value={eta}
-                onChange={(e) => setEta(Number(e.target.value))}
-                className="w-full text-sm pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none font-bold"
-              />
-            </div>
-            <span className="text-[11px] text-slate-400 block mt-1">নিকটস্থ এলাকায় পৌঁছাতে আনুমানিক কত মিনিট লাগবে।</span>
+            <select
+              value={vehicleType}
+              onChange={(e) => setVehicleType(e.target.value as Ambulance['vehicleType'])}
+              className="w-full text-sm px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:outline-none font-bold"
+            >
+              <option value="AC Ambulance">AC Ambulance</option>
+              <option value="Non-AC Ambulance">Non-AC Ambulance</option>
+              <option value="ICU Ambulance">ICU Ambulance</option>
+              <option value="Freezing Ambulance">Freezing Ambulance</option>
+            </select>
           </div>
         </div>
 
         {/* Save Button */}
         <div className="pt-4 border-t border-slate-100 flex items-center justify-between flex-wrap gap-3">
           <div className="text-xs text-slate-500">
-            সেভ করার সাথে সাথে লাইভ ডিসপ্যাচ ও অ্যাম্বুলেন্স লিস্টে আপডেট হবে।
+            {myAmbulance?.verified
+              ? 'সেভ করলে পাবলিক অ্যাম্বুলেন্স লিস্টে আপডেট হবে। লোকেশন হিসেবে আপনার বর্তমান GPS ব্যবহার হবে।'
+              : 'অ্যাডমিন যাচাই করার পর আপনার অ্যাম্বুলেন্স পাবলিক লিস্টে দেখাবে।'}
+            {saveError && <span className="block text-red-700 font-semibold mt-1">{saveError}</span>}
           </div>
 
           <button
             type="submit"
-            className="px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm rounded-xl shadow-md flex items-center gap-2 active:scale-95 transition-all"
+            disabled={saving}
+            className="disabled:opacity-60 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white font-black text-sm rounded-xl shadow-md flex items-center gap-2 active:scale-95 transition-all"
           >
             <Save className="w-4 h-4" />
             <span>গাড়ির তথ্য সেভ করুন (Save Updates)</span>

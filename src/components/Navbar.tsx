@@ -10,12 +10,10 @@ export const Navbar: React.FC = () => {
     setIsEmergencyModeOpen,
     setIsAuthModalOpen,
     currentUser,
-    switchUserRole,
     logout,
   } = useApp();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navLinks = [
@@ -118,53 +116,10 @@ export const Navbar: React.FC = () => {
           <div className="flex items-center gap-2 sm:gap-3">
             {currentUser ? (
               <>
-                {/* Role indicator dropdown for logged-in user */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setRoleDropdownOpen(!roleDropdownOpen)}
-                    className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200/80 rounded-xl text-xs font-semibold text-slate-700 transition-colors"
-                    title="Switch View Mode / Role"
-                  >
-                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${currentRoleConfig?.color}`}>
-                      {currentRoleConfig?.label}
-                    </span>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                  </button>
-
-                  {roleDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-[1200] animate-in fade-in duration-150">
-                      <div className="text-[10px] uppercase font-bold text-slate-400 px-3 py-1">
-                        Select Profile Role:
-                      </div>
-                      {(['donor', 'ambulance', 'admin'] as UserRole[]).map((r) => {
-                        const label = 
-                          r === 'donor' 
-                            ? '🩸 Blood Donor (রক্তদাতা)' 
-                            : r === 'ambulance' 
-                            ? '🚑 Ambulance Driver (চালক)' 
-                            : '🛡️ System Admin (অ্যাডমিন)';
-                        return (
-                          <button
-                            key={r}
-                            onClick={() => {
-                              switchUserRole(r);
-                              setRoleDropdownOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between ${
-                              currentUser.role === r
-                                ? 'bg-blue-50 text-blue-700 font-bold'
-                                : 'text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span>{label}</span>
-                            {currentUser.role === r && <span className="text-blue-600 font-bold">✓</span>}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                {/* Role badge (read-only — role comes from the server, it can't be switched here) */}
+                <span className={`hidden sm:inline text-[10px] font-bold px-1.5 py-0.5 rounded ${currentRoleConfig?.color}`}>
+                  {currentRoleConfig?.label}
+                </span>
 
                 {/* Profile Avatar / Menu Dropdown */}
                 <div className="relative">
@@ -205,17 +160,6 @@ export const Navbar: React.FC = () => {
                       >
                         <span>⚙️</span>
                         <span>{currentUser.role === 'admin' ? 'অ্যাডমিন ড্যাশবোর্ড' : currentUser.role === 'ambulance' ? 'ড্রাইভার পোর্টাল' : 'রক্তদাতা প্রোফাইল'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setUserMenuOpen(false);
-                          setIsAuthModalOpen(true);
-                        }}
-                        className="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2"
-                      >
-                        <span>🔄</span>
-                        <span>রোল পরিবর্তন করুন</span>
                       </button>
 
                       <div className="border-t border-slate-100 my-1"></div>

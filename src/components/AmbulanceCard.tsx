@@ -63,28 +63,39 @@ Requested at: ${new Date().toLocaleTimeString()}`;
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   🟢 Available
                 </span>
-              ) : (
+              ) : ambulance.status === 'busy' ? (
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
                   <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                  🟡 Busy on Call
+                  🟡 Busy
                 </span>
+              ) : ambulance.status === 'offline' ? (
+                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">⚫ Offline</span>
+              ) : (
+                <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full" title="Public business listing — live status not known">
+                  📋 কল করে নিশ্চিত হোন
+                </span>
+              )}
+              {ambulance.registered && ambulance.verified && (
+                <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">✓ Verified</span>
               )}
             </div>
 
             <h3 className="font-display font-bold text-lg text-slate-900 leading-snug">
               {ambulance.providerName}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5 font-mono">
-              Driver: {ambulance.driverName} • Reg: {ambulance.regNumber}
-            </p>
+            {(ambulance.driverName || ambulance.regNumber) && (
+              <p className="text-xs text-slate-500 mt-0.5 font-mono">
+                {ambulance.driverName && <>Driver: {ambulance.driverName}</>}
+                {ambulance.driverName && ambulance.regNumber && ' • '}
+                {ambulance.regNumber && <>Reg: {ambulance.regNumber}</>}
+              </p>
+            )}
           </div>
 
           {/* ETA Box */}
-          <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 text-center flex-shrink-0">
-            <span className="text-[10px] uppercase font-bold text-red-700 block">Est. Arrival</span>
-            <span className="text-xl font-black font-display text-red-600">
-              {ambulance.status === 'available' ? `${ambulance.etaMinutes}m` : 'Busy'}
-            </span>
+          <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2 text-center flex-shrink-0" title="Rough estimate from straight-line distance; real time depends on traffic">
+            <span className="text-[10px] uppercase font-bold text-red-700 block">আনুমানিক</span>
+            <span className="text-xl font-black font-display text-red-600">~{ambulance.etaMinutes}m</span>
           </div>
         </div>
 
@@ -95,13 +106,12 @@ Requested at: ${new Date().toLocaleTimeString()}`;
             {formatDistance(ambulance.distanceKm)}
           </span>
           <span>•</span>
-          <span className="text-slate-500 truncate max-w-[200px]">
-            {ambulance.hospitalAffiliation || 'Standby in Dhaka Sector'}
-          </span>
-          <span>•</span>
-          <span className="font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[11px]">
-            {ambulance.fareEstimate}
-          </span>
+          {ambulance.locationName && (
+            <>
+              <span>•</span>
+              <span className="text-slate-500 truncate max-w-[220px]">{ambulance.locationName}</span>
+            </>
+          )}
         </div>
 
         {/* Features Chips */}
@@ -152,7 +162,7 @@ Requested at: ${new Date().toLocaleTimeString()}`;
               onClick={() => onBookDispatch(ambulance)}
               className="flex items-center justify-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-2 px-3 rounded-xl text-xs transition-all"
             >
-              <span>Instant Dispatch ⚡</span>
+              <span>কল লগ করুন</span>
             </button>
           )}
         </div>
