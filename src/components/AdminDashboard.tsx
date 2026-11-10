@@ -60,7 +60,7 @@ export const AdminDashboard: React.FC = () => {
   const [draftPhone, setDraftPhone] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const pendingDonors = donors.filter(d => !d.verified);
+  const pendingDonors = donors.filter(d => !d.verified && !d.listed);
   const pendingAmbulances = registeredAmbulances.filter(a => !a.verified);
   const openEmergencies = emergencyRequests.filter(e => e.status !== 'resolved');
   const statusUpdatedCount = hospitals.filter(h => h.statusUpdatedAt).length;
@@ -129,7 +129,7 @@ export const AdminDashboard: React.FC = () => {
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
         <Metric label="Hospitals" value={hospitals.length} sub={`${statusUpdatedCount} টির স্ট্যাটাস কনফার্মড`} />
-        <Metric label="Donors" value={donors.length} sub={`${donors.filter(d => d.available).length} available`} />
+        <Metric label="Donors" value={donors.length} sub={`${donors.filter(d => !d.listed).length} registered`} />
         <Metric label="Registered Ambulances" value={registeredAmbulances.length} sub={`${pendingAmbulances.length} pending`} />
         <Metric label="Open Emergencies" value={openEmergencies.length} />
         <Metric label="Pending Verifications" value={pendingDonors.length + pendingAmbulances.length} />
@@ -140,7 +140,7 @@ export const AdminDashboard: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {[
             { title: '🚑 অ্যাম্বুলেন্স (যাচাই না হলে পাবলিক লিস্টে দেখায় না)', items: registeredAmbulances.map(a => ({ id: a.id, type: 'ambulance' as const, verified: !!a.verified, title: a.providerName || a.driverName, sub: `${a.vehicleType} • ${a.regNumber || 'reg no. নেই'} • ${a.locationName || ''}`, phone: a.phone })) },
-            { title: '🩸 রক্তদাতা', items: donors.map(d => ({ id: d.id, type: 'donor' as const, verified: d.verified, title: `${d.name} (${d.bloodGroup})`, sub: d.area || d.district, phone: d.phone })) },
+            { title: '🩸 রক্তদাতা', items: donors.filter(d => !d.listed).map(d => ({ id: d.id, type: 'donor' as const, verified: d.verified, title: `${d.name} (${d.bloodGroup})`, sub: d.area || d.district, phone: d.phone })) },
           ].map(section => (
             <div key={section.title} className="bg-white rounded-3xl border border-slate-200 p-5 shadow-card-soft space-y-3">
               <h3 className="font-display font-bold text-base text-slate-900">{section.title}</h3>

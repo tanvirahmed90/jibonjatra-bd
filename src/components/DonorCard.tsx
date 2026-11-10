@@ -28,6 +28,11 @@ export const DonorCard: React.FC<DonorCardProps> = ({ donor, onRequestBlood }) =
           <div>
             <div className="flex items-center gap-1.5 flex-wrap">
               <h4 className="font-bold text-slate-900 text-base">{donor.name}</h4>
+              {donor.listed && (
+                <span className="text-[10px] font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded-full" title="পাবলিক রক্তদাতা তালিকা থেকে — কল করে নিশ্চিত হোন রক্ত দিতে পারবেন কিনা">
+                  পাবলিক তালিকা
+                </span>
+              )}
               {donor.verified && (
                 <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full border border-emerald-200" title="Verified Volunteer Blood Donor">
                   <ShieldCheck className="w-3 h-3 text-emerald-600" />

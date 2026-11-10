@@ -85,6 +85,8 @@ export interface BloodDonor {
   donationCount: number;
   verified: boolean;
   contactPreference: 'call' | 'sms' | 'both';
+  /** true = imported public donor list (not a registered account on JibonJatra) */
+  listed?: boolean;
 }
 
 export interface Ambulance {

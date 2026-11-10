@@ -40,8 +40,8 @@ The facility registry is aligned with the **Government of the People's Republic 
 - Phone numbers: only verified numbers are shown. Without one, the CALL button opens the hospital's Google Maps listing, which carries its current number.
 
 ### 3. 🩸 Blood Donors
-- Only donors who **registered themselves** (with consent to be contacted) are listed.
-- Donors log in, set blood group, area, last donation date and toggle "Available".
+- A public donor list (`public/data/donors.json`, marked "পাবলিক তালিকা" in the UI — call to confirm) plus donors who **registered themselves**.
+- Registered donors log in, set blood group, area, last donation date and toggle "Available".
 
 ### 4. 🚑 Ambulances
 - Public ambulance service listings (call to confirm availability) + driver-registered ambulances, which appear only after **admin verification**, with live Available/Busy/Offline status.

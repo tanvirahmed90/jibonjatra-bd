@@ -216,6 +216,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [listedAmbulances, setListedAmbulances] = useState<Ambulance[]>([]);
   const [registeredAmbulances, setRegisteredAmbulances] = useState<Ambulance[]>([]);
   const [donorRows, setDonorRows] = useState<BloodDonor[]>([]);
+  const [listedDonors, setListedDonors] = useState<BloodDonor[]>([]);
   const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequest[]>([]);
   const [isDataLoading, setIsDataLoading] = useState(true);
 
@@ -288,8 +289,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       }
     };
 
-    Promise.all([loadJson<Hospital>('hospitals.json'), loadJson<Ambulance>('ambulances.json')]).then(([h, a]) => {
+    Promise.all([
+      loadJson<Hospital>('hospitals.json'),
+      loadJson<Ambulance>('ambulances.json'),
+      loadJson<Partial<BloodDonor>>('donors.json'),
+    ]).then(([h, a, d]) => {
       if (cancelled) return;
+      setListedDonors(
+        d.map(x => ({
+          ...(x as BloodDonor),
+          distanceKm: 0,
+          emergencyEligible: true,
+          lastActive: '',
+          donationCount: 0,
+          verified: false,
+          contactPreference: 'call',
+          listed: true,
+        }))
+      );
       setBaseHospitals(h);
       setListedAmbulances(a.map(x => ({ ...x, registered: false, verified: false })));
       setIsDataLoading(false);
@@ -658,11 +675,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const donors = useMemo(
     () =>
-      donorRows.map(d => ({
+      // Registered donors (own accounts) first, then the imported public donor list
+      [...donorRows, ...listedDonors].map(d => ({
         ...d,
         distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, d.lat, d.lng),
       })),
-    [donorRows, userLocation.lat, userLocation.lng]
+    [donorRows, listedDonors, userLocation.lat, userLocation.lng]
   );
 
   const ambulances = useMemo(() => {
