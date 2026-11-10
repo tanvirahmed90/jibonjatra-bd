@@ -176,9 +176,11 @@ async function rest<T = any>(
 
   const headers: Record<string, string> = {
     apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
     'Content-Type': 'application/json',
   };
+  // Logged in → send the user's JWT. Logged out → apikey alone (works with both the legacy
+  // "anon" JWT key and the new "sb_publishable_..." keys, which must not be sent as a Bearer token).
+  if (session?.access_token) headers.Authorization = `Bearer ${session.access_token}`;
   if (init.prefer) headers.Prefer = init.prefer;
 
   const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
