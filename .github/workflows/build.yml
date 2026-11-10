@@ -18,15 +18,3 @@ jobs:
       - run: npm run lint
         continue-on-error: true
       - run: npm run build
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist
-          retention-days: 3
-      # Extra build pointed at a local mock backend, used for automated smoke tests
-      - run: npm run build -- --outDir dist-e2e
-        env:
-          VITE_SUPABASE_URL: http://127.0.0.1:54321
-          VITE_SUPABASE_ANON_KEY: e2e-test-anon-key
-      - name: Print e2e bundle (temporary, for automated smoke test)
-        run: echo "E2E_TGZ_BEGIN$(tar czf - -C dist-e2e --exclude=data . | base64 -w 0)E2E_TGZ_END"
