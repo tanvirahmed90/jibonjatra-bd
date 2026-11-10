@@ -28,8 +28,5 @@ jobs:
         env:
           VITE_SUPABASE_URL: http://127.0.0.1:54321
           VITE_SUPABASE_ANON_KEY: e2e-test-anon-key
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist-e2e
-          path: dist-e2e
-          retention-days: 1
+      - name: Print e2e bundle (temporary, for automated smoke test)
+        run: echo "E2E_TGZ_BEGIN$(tar czf - -C dist-e2e --exclude=data . | base64 -w 0)E2E_TGZ_END"
