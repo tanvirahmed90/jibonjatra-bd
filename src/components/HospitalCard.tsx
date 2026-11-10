@@ -3,7 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { Phone, MapPin, ExternalLink, Star, ShieldCheck, Building2, Wind } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
-import { getDirectionsUrl } from '../utils/directions';
+import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/directions';
 
 interface HospitalCardProps {
   hospital: Hospital;
@@ -12,6 +12,9 @@ interface HospitalCardProps {
 
 export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDetails }) => {
   const directionsUrl = getDirectionsUrl(hospital);
+  // Only show live status when an admin has confirmed it with the hospital
+  const hasConfirmedStatus = !!hospital.statusUpdatedAt;
+  const hasPhone = !!hospital.emergencyHotline;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card-soft hover:shadow-card-hover transition-all duration-300 flex flex-col overflow-hidden group">
@@ -28,7 +31,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
         {/* Distance Badge */}
         <div className="absolute top-3 left-3 bg-red-600/95 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md flex items-center gap-1">
           <MapPin className="w-3.5 h-3.5" />
-          <span>{formatDistance(hospital.distanceKm)}</span>
+          <span>{hospital.locationApprox ? '~' : ''}{formatDistance(hospital.distanceKm)}</span>
         </div>
 
         {/* Verified Facility Badge or Live Map Sync Badge */}
@@ -38,9 +41,9 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
             <span>Live Map Sync</span>
           </div>
         ) : hospital.mohfwVerified ? (
-          <div className="absolute top-3 right-3 bg-emerald-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1" title="Verified Emergency Hospital Facility">
+          <div className="absolute top-3 right-3 bg-emerald-700/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-semibold shadow-md flex items-center gap-1" title="Listed in the official DGHS (MOHFW) facility registry">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-200" />
-            <span>Verified Facility</span>
+            <span>DGHS Registry</span>
           </div>
         ) : null}
 
@@ -75,13 +78,16 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
             <Building2 className="w-3.5 h-3.5 text-slate-400 flex-shrink-0 mt-0.5" />
             <span className="truncate">{hospital.address}</span>
           </div>
-          <span className="flex-shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-500">
-            Reg: #{hospital.code}
-          </span>
+          {hospital.code && (
+            <span className="flex-shrink-0 bg-slate-100 px-1.5 py-0.5 rounded text-[11px] font-mono text-slate-500">
+              Reg: #{hospital.code}
+            </span>
+          )}
         </div>
 
-        {/* 4 Essential Facilities Status Badges */}
-        <div className="grid grid-cols-2 gap-2 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
+        {/* Facility status — shown only when confirmed by an admin; otherwise ask to call */}
+        {hasConfirmedStatus ? (
+          <div className="grid grid-cols-2 gap-2 bg-slate-50/80 p-2.5 rounded-xl border border-slate-100">
           <div className="flex items-center justify-between text-xs">
             <span className="font-semibold text-slate-700">Emergency:</span>
             <FacilityStatus status={hospital.facilities.emergency} size="sm" />
@@ -99,26 +105,46 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
             <FacilityStatus status={hospital.facilities.bloodBank} size="sm" />
           </div>
         </div>
-
-        {/* Oxygen & Live Bed Stock summary if available */}
-        <div className="flex items-center text-[11px] text-slate-500 pt-0.5">
-          <div className="flex items-center gap-1.5">
-            <Wind className="w-3 h-3 text-cyan-600" />
-            <span>Oxygen Plant:</span>
-            <span className="font-medium text-slate-700 capitalize">{hospital.facilities.oxygen}</span>
+        ) : (
+          <div className="bg-amber-50/70 border border-amber-100 rounded-xl p-2.5 text-[11px] text-amber-900 leading-relaxed">
+            ICU / বেড খালি আছে কিনা জানতে রওনা দেওয়ার আগে হাসপাতালে ফোন করে নিশ্চিত হোন।
           </div>
-        </div>
+        )}
+
+        {hasConfirmedStatus && (
+          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+            <div className="flex items-center gap-1.5">
+              <Wind className="w-3 h-3 text-cyan-600" />
+              <span>Oxygen:</span>
+              <FacilityStatus status={hospital.facilities.oxygen} size="sm" />
+            </div>
+            <span title="Confirmed by JibonJatra admin">✓ {new Date(hospital.statusUpdatedAt as string).toLocaleDateString()}</span>
+          </div>
+        )}
 
         {/* Action Buttons */}
         <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 mt-auto">
-          <a
-            href={`tel:${hospital.emergencyHotline}`}
-            className="flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-sm transition-all text-center"
-            title={`Call Emergency Hotline ${hospital.emergencyHotline}`}
-          >
-            <Phone className="w-3.5 h-3.5 animate-pulse" />
-            <span>CALL</span>
-          </a>
+          {hasPhone ? (
+            <a
+              href={`tel:${hospital.emergencyHotline}`}
+              className="flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-sm transition-all text-center"
+              title={`Call ${hospital.emergencyHotline}`}
+            >
+              <Phone className="w-3.5 h-3.5 animate-pulse" />
+              <span>CALL</span>
+            </a>
+          ) : (
+            <a
+              href={getPlaceSearchUrl(hospital)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-1.5 bg-red-600 hover:bg-red-700 active:scale-95 text-white font-bold py-2.5 px-2 rounded-xl text-xs shadow-sm transition-all text-center"
+              title="Google Maps-এ হাসপাতালের আসল ফোন নম্বর দেখুন"
+            >
+              <Phone className="w-3.5 h-3.5" />
+              <span>নম্বর দেখুন</span>
+            </a>
+          )}
 
           <a
             href={directionsUrl}

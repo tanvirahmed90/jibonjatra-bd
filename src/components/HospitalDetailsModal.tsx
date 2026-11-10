@@ -3,7 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { X, Phone, MapPin, ExternalLink, Star, ShieldCheck, Building2, AlertTriangle, Bed, HeartPulse } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
-import { getDirectionsUrl as buildDirectionsUrl } from '../utils/directions';
+import { getDirectionsUrl as buildDirectionsUrl, getPlaceSearchUrl } from '../utils/directions';
 
 interface HospitalDetailsModalProps {
   hospital: Hospital | null;
@@ -27,6 +27,11 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
   ] as const;
 
   const getDirectionsUrl = () => buildDirectionsUrl(hospital);
+  const hasConfirmedStatus = !!hospital.statusUpdatedAt;
+  const hasPhone = !!hospital.emergencyHotline;
+  // tel: link when we have a verified number, otherwise the Google Maps listing (shows the real number)
+  const callHref = hasPhone ? `tel:${hospital.emergencyHotline}` : getPlaceSearchUrl(hospital);
+  const callTarget = hasPhone ? {} : { target: '_blank', rel: 'noopener noreferrer' };
 
   return (
     <div className="fixed inset-0 z-[1200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
@@ -57,7 +62,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
             {hospital.mohfwVerified && (
               <span className="bg-emerald-600 text-white px-3 py-1 rounded-full text-xs font-semibold shadow flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                Verified Facility Code #{hospital.code}
+                DGHS Registry Code #{hospital.code}
               </span>
             )}
           </div>
@@ -98,35 +103,28 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
             </div>
           </div>
 
-          {/* Key Quick Contacts */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="bg-red-50/70 border border-red-100 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-red-700 block uppercase">24/7 Emergency Hotline</span>
+          {/* Contact — only verified numbers are shown */}
+          <div className="bg-red-50/70 border border-red-100 rounded-2xl p-4 flex items-center justify-between gap-3">
+            <div>
+              <span className="text-xs font-bold text-red-700 block uppercase">
+                {hasPhone ? 'যাচাইকৃত ইমার্জেন্সি নম্বর' : 'ফোন নম্বর'}
+              </span>
+              {hasPhone ? (
                 <span className="text-lg font-mono font-bold text-red-900">{hospital.emergencyHotline}</span>
-              </div>
-              <a
-                href={`tel:${hospital.emergencyHotline}`}
-                className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-xl shadow-md transition-all active:scale-95"
-                title="Call Emergency Hotline"
-              >
-                <Phone className="w-5 h-5 animate-pulse" />
-              </a>
+              ) : (
+                <span className="text-xs text-slate-700">
+                  আমাদের কাছে যাচাইকৃত নম্বর নেই। Google Maps-এ হাসপাতালের পেজ থেকে সরাসরি কল করুন। জরুরি প্রয়োজনে 999।
+                </span>
+              )}
             </div>
-
-            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-semibold text-slate-500 block uppercase">Main Reception / PABX</span>
-                <span className="text-base font-mono font-semibold text-slate-800">{hospital.phone}</span>
-              </div>
-              <a
-                href={`tel:${hospital.phone}`}
-                className="bg-slate-200 hover:bg-slate-300 text-slate-700 p-3 rounded-xl transition-all"
-                title="Call General Line"
-              >
-                <Phone className="w-4 h-4" />
-              </a>
-            </div>
+            <a
+              href={callHref}
+              {...callTarget}
+              className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-xl shadow-md transition-all active:scale-95 shrink-0"
+              title={hasPhone ? 'Call' : 'Google Maps-এ নম্বর দেখুন'}
+            >
+              <Phone className="w-5 h-5" />
+            </a>
           </div>
 
           {/* Address & Navigation Details */}
@@ -193,11 +191,12 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
             </div>
           )}
 
-          {/* Complete 10 Emergency Facilities Breakdown */}
+          {/* Facilities — only shown when an admin confirmed them with the hospital */}
+          {hasConfirmedStatus ? (
           <div>
             <h4 className="font-display font-bold text-base text-slate-900 mb-3 flex items-center gap-2">
               <HeartPulse className="w-5 h-5 text-red-600" />
-              <span>Full Emergency Facilities & Specialized Units</span>
+              <span>Facilities (কনফার্ম: {new Date(hospital.statusUpdatedAt as string).toLocaleString()})</span>
             </h4>
 
             <div className="divide-y divide-slate-100 border border-slate-200 rounded-2xl overflow-hidden bg-white">
@@ -217,6 +216,11 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
               })}
             </div>
           </div>
+          ) : (
+            <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-slate-600">
+              এই হাসপাতালের ICU/NICU/বেডের লাইভ তথ্য এখনো আমাদের কাছে নেই। রোগী নিয়ে যাওয়ার আগে অবশ্যই ফোন করে নিশ্চিত হোন।
+            </div>
+          )}
 
           {/* Hospital Notes / Trauma Level */}
           {hospital.notes && (
@@ -248,11 +252,12 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
           </a>
 
           <a
-            href={`tel:${hospital.emergencyHotline}`}
+            href={callHref}
+            {...callTarget}
             className="w-full sm:w-auto px-6 py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-md transition-colors"
           >
             <Phone className="w-4 h-4" />
-            <span>📞 Call Hospital Hotline</span>
+            <span>{hasPhone ? '📞 Call Hospital' : '📞 নম্বর দেখুন'}</span>
           </a>
         </div>
       </div>

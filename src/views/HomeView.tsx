@@ -145,7 +145,7 @@ export const HomeView: React.FC = () => {
                 Find & Call Nearby Ambulance
               </p>
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Emergency ICU, AC & non-AC dispatch with live ETA and direct phone contacts.
+                ICU, AC &amp; non-AC ambulance services near you with direct phone contacts.
               </p>
             </div>
             <div className="pt-4 flex items-center gap-1.5 text-xs font-bold text-red-600 group-hover:translate-x-1 transition-transform">
@@ -170,7 +170,7 @@ export const HomeView: React.FC = () => {
                 Find Blood Donors Near You
               </p>
               <p className="text-xs text-slate-500 mt-1.5 leading-relaxed">
-                Search verified voluntary donors by blood group (A+, B+, O-, AB-, etc.) and radius.
+                Search registered voluntary donors by blood group (A+, B+, O-, AB-, etc.) and radius.
               </p>
             </div>
             <div className="pt-4 flex items-center gap-1.5 text-xs font-bold text-rose-600 group-hover:translate-x-1 transition-transform">
@@ -427,7 +427,7 @@ export const HomeView: React.FC = () => {
                 24/7 Emergency Healthcare Network
               </span>
               <h3 className="font-display font-bold text-lg text-slate-900">
-                Verified Hospitals, Emergency Blood & Ambulance Fleet
+                Hospitals, Blood Donors &amp; Ambulance Services
               </h3>
               <p className="text-xs text-slate-600 mt-0.5">
                 Connecting patients to critical care and lifesaving facilities across all divisions in Bangladesh.

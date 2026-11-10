@@ -3,7 +3,7 @@ import { useApp } from '../context/AppContext';
 import { X, Phone, Navigation, AlertTriangle, CheckCircle2, Clock, MapPin, Loader2, ArrowRight, Map as MapIcon, ExternalLink } from 'lucide-react';
 import { BloodGroup, Hospital, Ambulance, BloodDonor } from '../types';
 import { formatDistance, POPULAR_BANGLADESH_AREAS } from '../utils/geo';
-import { getDirectionsUrl } from '../utils/directions';
+import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/directions';
 
 interface EmergencyRequestModalProps {
   isOpen: boolean;
@@ -69,62 +69,93 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
     }
   }, [isOpen]);
 
-  // Re-sync assigned resource if location changes while in 'connected' view
+  /**
+   * Pick the nearest suitable resource. Nothing is dispatched automatically — the user is
+   * shown who to CALL. Never crashes on empty lists: falls back to national hotlines.
+   */
+  const findBestMatch = (cat: EmergencyCategory, group: BloodGroup): AssignedInfo => {
+    const fallback = (name: string, phone: string, type: string): AssignedInfo => ({
+      name,
+      phone,
+      distance: '',
+      eta: 0,
+      type,
+      address: '',
+      lat: userLocation.lat,
+      lng: userLocation.lng,
+    });
+
+    if (cat === 'ambulance') {
+      const sorted = [...ambulances].sort((a, b) => a.distanceKm - b.distanceKm);
+      // Prefer verified ambulances that marked themselves available, then nearest listed service
+      const best =
+        sorted.find(a => a.status === 'available' && a.distanceKm < 15) ||
+        sorted.find(a => a.status !== 'busy' && a.status !== 'offline');
+      if (!best) return fallback('National Emergency Service', '999', 'Government ambulance');
+      const dist = formatDistance(best.distanceKm);
+      return {
+        name: best.providerName,
+        phone: best.phone,
+        distance: dist,
+        eta: best.etaMinutes,
+        type: best.status === 'available' ? `${best.vehicleType} • Available` : `${best.vehicleType} • কল করে নিশ্চিত হোন`,
+        address: best.locationName || '',
+        lat: best.lat,
+        lng: best.lng,
+        ambulance: best,
+      };
+    }
+
+    if (cat === 'blood') {
+      const matched = [...donors]
+        .filter(d => d.available && d.bloodGroup === group)
+        .sort((a, b) => a.distanceKm - b.distanceKm)[0];
+      if (!matched) {
+        return fallback('স্বাস্থ্য বাতায়ন (Shastho Batayan)', '16263', `${group} রক্তদাতা পাওয়া যায়নি — হেল্পলাইনে কল করুন`);
+      }
+      return {
+        name: `${matched.name} (${matched.bloodGroup})`,
+        phone: matched.phone,
+        distance: formatDistance(matched.distanceKm),
+        eta: 0,
+        type: `${matched.verified ? 'Verified ' : ''}Donor (${matched.area})`,
+        address: matched.area,
+        lat: matched.lat,
+        lng: matched.lng,
+        donor: matched,
+      };
+    }
+
+    // Hospital / ICU: skip union & community health centres (no emergency department)
+    const EMERGENCY_TYPES = ['Govt. Medical College', 'Specialized Institute', 'Private Tertiary', 'District Hospital', 'Upazila Health Complex'];
+    const ICU_TYPES = ['Govt. Medical College', 'Specialized Institute', 'Private Tertiary', 'District Hospital'];
+    const types = cat === 'icu' ? ICU_TYPES : EMERGENCY_TYPES;
+    const statusKey = cat === 'icu' ? 'icu' : 'emergency';
+    const sorted = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm);
+    const confirmed = sorted.find(h => h.statusUpdatedAt && h.facilities[statusKey] === 'available' && h.distanceKm < 15);
+    const best = confirmed || sorted.find(h => types.includes(h.type)) || sorted[0];
+    if (!best) return fallback('National Emergency Service', '999', 'Emergency');
+    return {
+      name: best.name,
+      phone: best.emergencyHotline,
+      distance: formatDistance(best.distanceKm),
+      eta: Math.round(best.distanceKm * 2.8 + 3),
+      type: confirmed
+        ? `${best.type} • ${cat === 'icu' ? 'ICU' : 'Emergency'} available (confirmed)`
+        : `${best.type} • ${cat === 'icu' ? 'ICU' : 'বেড'} আছে কিনা ফোন করে নিশ্চিত হোন`,
+      address: best.address,
+      lat: best.lat,
+      lng: best.lng,
+      hospital: best,
+    };
+  };
+
+  // Re-sync suggestion if location changes while in 'connected' view
   useEffect(() => {
     if (step === 'connected' && selectedType) {
-      if (selectedType === 'hospital' || selectedType === 'icu') {
-        const sorted = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm);
-        const best = sorted[0];
-        if (best) {
-          setAssignedInfo(prev => prev ? {
-            ...prev,
-            name: best.name,
-            phone: best.emergencyHotline,
-            distance: formatDistance(best.distanceKm),
-            eta: Math.round(best.distanceKm * 2.8 + 3),
-            type: `${best.type} • Bed Available`,
-            address: best.address,
-            lat: best.lat,
-            lng: best.lng,
-            hospital: best,
-          } : null);
-        }
-      } else if (selectedType === 'ambulance') {
-        const sorted = [...ambulances].filter(a => a.status === 'available').sort((a, b) => a.distanceKm - b.distanceKm);
-        const best = sorted[0] || ambulances[0];
-        if (best) {
-          const dist = formatDistance(best.distanceKm);
-          setAssignedInfo(prev => prev ? {
-            ...prev,
-            name: best.providerName,
-            phone: best.phone,
-            distance: dist,
-            eta: best.etaMinutes,
-            type: best.vehicleType,
-            address: `Active in Sector (${dist})`,
-            lat: best.lat,
-            lng: best.lng,
-            ambulance: best,
-          } : null);
-        }
-      } else if (selectedType === 'blood') {
-        const group = selectedBloodGroup;
-        const matched = donors.find(d => d.available && d.bloodGroup === group) || donors[0];
-        if (matched) {
-          setAssignedInfo(prev => prev ? {
-            ...prev,
-            name: `${matched.name} (${matched.bloodGroup})`,
-            phone: matched.phone,
-            distance: formatDistance(matched.distanceKm),
-            type: `Verified Donor (${matched.area})`,
-            address: `${matched.area}, Bangladesh`,
-            lat: matched.lat,
-            lng: matched.lng,
-            donor: matched,
-          } : null);
-        }
-      }
+      setAssignedInfo(findBestMatch(selectedType, selectedBloodGroup));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLocation.lat, userLocation.lng, hospitals, ambulances, donors, step, selectedType, selectedBloodGroup]);
 
   if (!isOpen) return null;
@@ -140,95 +171,22 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
 
   const triggerEmergencyDispatch = (cat: EmergencyCategory, bloodGrp?: BloodGroup) => {
     setStep('dispatching');
-    setStatusMessage('🚨 Emergency Request Created...');
+    setStatusMessage(
+      cat === 'ambulance'
+        ? '📡 নিকটতম অ্যাম্বুলেন্স খোঁজা হচ্ছে...'
+        : cat === 'blood'
+        ? `🩸 ${bloodGrp || selectedBloodGroup} রক্তদাতা খোঁজা হচ্ছে...`
+        : '🏥 নিকটতম হাসপাতাল খোঁজা হচ্ছে...'
+    );
 
-    // Multi-phase status progression as requested:
-    // 1. "Emergency Request Created"
-    // 2. "Finding nearest emergency resources..."
-    // 3. "Provider contacted" -> "Estimated arrival / direct connection"
-
+    // Short delay only so the user sees what is happening — matching itself is instant
     setTimeout(() => {
-      setStatusMessage(
-        cat === 'ambulance'
-          ? '📡 Finding closest active ambulance in your sector...'
-          : cat === 'blood'
-          ? `🩸 Searching verified emergency ${bloodGrp || 'O+'} blood donors...`
-          : '🏥 Checking verified emergency trauma & ICU beds...'
-      );
-    }, 1200);
-
-    setTimeout(() => {
-      let matchedName = '999 Central Dispatch';
-      let matchedPhone = '999';
-      let dist = '1.2 km away';
-      let eta = 6;
-      let typeLabel = 'Emergency Service';
-      let matchedAddress = 'Central Dispatch, Dhaka';
-      let targetLat = userLocation.lat;
-      let targetLng = userLocation.lng;
-      let matchedHospital: Hospital | undefined;
-      let matchedAmbulance: Ambulance | undefined;
-      let matchedDonor: BloodDonor | undefined;
-
-      if (cat === 'ambulance') {
-        const sorted = [...ambulances].filter(a => a.status === 'available').sort((a, b) => a.distanceKm - b.distanceKm);
-        const best = sorted[0] || ambulances[0];
-        matchedName = best.providerName;
-        matchedPhone = best.phone;
-        dist = formatDistance(best.distanceKm);
-        eta = best.etaMinutes;
-        typeLabel = best.vehicleType;
-        targetLat = best.lat;
-        targetLng = best.lng;
-        matchedAddress = `Active in Dhaka Sector (${dist})`;
-        matchedAmbulance = best;
-      } else if (cat === 'blood') {
-        const group = bloodGrp || selectedBloodGroup;
-        const matched = donors.find(d => d.available && d.bloodGroup === group) || donors[0];
-        matchedName = `${matched.name} (${matched.bloodGroup})`;
-        matchedPhone = matched.phone;
-        dist = formatDistance(matched.distanceKm);
-        eta = 15;
-        typeLabel = `Verified Donor (${matched.area})`;
-        targetLat = matched.lat;
-        targetLng = matched.lng;
-        matchedAddress = `${matched.area}, Bangladesh`;
-        matchedDonor = matched;
-      } else if (cat === 'hospital' || cat === 'icu') {
-        const sorted = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm);
-        const best = sorted[0];
-        matchedName = best.name;
-        matchedPhone = best.emergencyHotline;
-        dist = formatDistance(best.distanceKm);
-        eta = Math.round(best.distanceKm * 2.8 + 3);
-        typeLabel = `${best.type} • Bed Available`;
-        targetLat = best.lat;
-        targetLng = best.lng;
-        matchedAddress = best.address;
-        matchedHospital = best;
-      }
-
-      setAssignedInfo({
-        name: matchedName,
-        phone: matchedPhone,
-        distance: dist,
-        eta,
-        type: typeLabel,
-        address: matchedAddress,
-        lat: targetLat,
-        lng: targetLng,
-        hospital: matchedHospital,
-        ambulance: matchedAmbulance,
-        donor: matchedDonor,
-      });
-
-      setStatusMessage(cat === 'ambulance' ? '🚑 Ambulance Contacted & Assigned!' : '⚡ Emergency Resource Connected!');
+      const info = findBestMatch(cat, bloodGrp || selectedBloodGroup);
+      setAssignedInfo(info);
+      setStatusMessage('নিচের নম্বরে এখনই কল করুন');
       setStep('connected');
-
-      requestEmergencyAssistance(cat, {
-        bloodGroup: bloodGrp,
-      });
-    }, 2800);
+      requestEmergencyAssistance(cat, { bloodGroup: bloodGrp });
+    }, 700);
   };
 
   return (
@@ -434,7 +392,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               <h3 className="font-display font-extrabold text-xl text-slate-900">
                 Select Required Blood Group:
               </h3>
-              <p className="text-xs text-slate-500 mt-1">We will immediately match available emergency donors</p>
+              <p className="text-xs text-slate-500 mt-1">নিকটতম available রক্তদাতা দেখানো হবে — আপনি সরাসরি কল করবেন</p>
             </div>
 
             <div className="grid grid-cols-4 gap-2.5">
@@ -480,7 +438,7 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
                 {statusMessage}
               </h3>
               <p className="text-xs text-slate-500 mt-2">
-                Matching geo-coordinates with nearest verified healthcare network in Bangladesh...
+                আপনার লোকেশনের সবচেয়ে কাছের সেবা খোঁজা হচ্ছে…
               </p>
             </div>
 
@@ -498,7 +456,9 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6 text-emerald-600 flex-shrink-0" />
               <div>
                 <h4 className="font-bold text-emerald-900 text-xs sm:text-sm">{statusMessage}</h4>
-                <p className="text-[11px] sm:text-xs text-emerald-700">Immediate direct line established with the responder</p>
+                <p className="text-[11px] sm:text-xs text-emerald-700">
+                  এটি একটি পরামর্শ — কাউকে স্বয়ংক্রিয়ভাবে পাঠানো হয়নি। নিজে কল করে নিশ্চিত হোন। জীবন-ঝুঁকিতে সবসময় 999।
+                </p>
               </div>
             </div>
 
@@ -518,32 +478,20 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
                       <span>{assignedInfo.address}</span>
                     </p>
                   )}
-                  <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                    <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
-                    <span>{assignedInfo.distance} from your incident point</span>
-                  </p>
+                  {assignedInfo.distance && (
+                    <p className="text-[11px] sm:text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                      <Navigation className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                      <span>আপনার থেকে {assignedInfo.distance}{assignedInfo.hospital?.locationApprox ? ' (আনুমানিক)' : ''}</span>
+                    </p>
+                  )}
                 </div>
 
-                <div className="bg-red-600 text-white rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-center flex-shrink-0 shadow-sm">
-                  <span className="text-[9px] sm:text-[10px] uppercase font-bold text-red-200 block">Est. Time</span>
-                  <span className="text-lg sm:text-xl font-black font-display">{assignedInfo.eta} mins</span>
-                </div>
-              </div>
-
-              {/* Progress Tracker Steps */}
-              <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 text-[11px] sm:text-xs space-y-1.5 sm:space-y-2">
-                <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                  <span>Emergency Request Created (Logged in JibonJatra BD)</span>
-                </div>
-                <div className="flex items-center gap-2 text-emerald-700 font-semibold">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0"></span>
-                  <span>Resource Located & Alerted</span>
-                </div>
-                <div className="flex items-center gap-2 text-blue-700 font-semibold animate-pulse">
-                  <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0"></span>
-                  <span>Estimated Arrival / Transit: {assignedInfo.eta} minutes</span>
-                </div>
+                {assignedInfo.eta > 0 && (
+                  <div className="bg-red-600 text-white rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-center flex-shrink-0 shadow-sm" title="Rough estimate; depends on traffic">
+                    <span className="text-[9px] sm:text-[10px] uppercase font-bold text-red-200 block">আনুমানিক</span>
+                    <span className="text-lg sm:text-xl font-black font-display">~{assignedInfo.eta} min</span>
+                  </div>
+                )}
               </div>
 
               {/* Real Location Navigation Buttons */}
@@ -585,7 +533,8 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
 
             {/* Compact & Proportional Call Responder Button */}
             <a
-              href={`tel:${assignedInfo.phone}`}
+              href={assignedInfo.phone ? `tel:${assignedInfo.phone}` : getPlaceSearchUrl(assignedInfo.hospital || { name: assignedInfo.name })}
+              {...(assignedInfo.phone ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
               className="w-full py-2.5 sm:py-3 px-4 bg-gradient-to-r from-red-600 via-rose-600 to-red-600 hover:from-red-700 hover:to-rose-700 text-white rounded-xl sm:rounded-2xl shadow-emergency flex items-center justify-center gap-3 transition-all active:scale-98 text-center group"
             >
               <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 group-hover:bg-white/30 flex items-center justify-center shrink-0">
@@ -593,11 +542,13 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 <span className="text-xs sm:text-sm font-extrabold tracking-wide uppercase">
-                  CALL RESPONDER NOW:
+                  {assignedInfo.phone ? 'এখনই কল করুন:' : 'Google Maps-এ নম্বর দেখে কল করুন'}
                 </span>
-                <span className="text-xs sm:text-sm font-black font-mono tracking-wider bg-black/20 px-2 py-0.5 rounded-lg">
-                  {assignedInfo.phone}
-                </span>
+                {assignedInfo.phone && (
+                  <span className="text-xs sm:text-sm font-black font-mono tracking-wider bg-black/20 px-2 py-0.5 rounded-lg">
+                    {assignedInfo.phone}
+                  </span>
+                )}
               </div>
             </a>
 

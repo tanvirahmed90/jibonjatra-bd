@@ -1,9 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
-import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, UserRole } from '../types';
-import { INITIAL_HOSPITALS, INITIAL_BLOOD_DONORS, INITIAL_AMBULANCES, INITIAL_USERS } from '../data/mockData';
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
+import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, BloodGroup, HospitalFacilityStatus } from '../types';
 import { calculateDistanceKm, getGeolocationWithFallbacks } from '../utils/geo';
 import { fetchLiveNearbyHospitals, mergeWithLiveHospitals } from '../utils/liveMapService';
-
+import {
+  auth,
+  db,
+  isBackendConfigured,
+  DonorRow,
+  AmbulanceRow,
+  EmergencyRow,
+  HospitalStatusRow,
+  ProfileRow,
+  SelfRegisterRole,
+} from '../lib/backend';
 
 interface UserLocation {
   lat: number;
@@ -12,12 +21,27 @@ interface UserLocation {
   isLive: boolean;
 }
 
+export interface SignUpInput {
+  name: string;
+  email: string;
+  phone: string;
+  password: string;
+  role: SelfRegisterRole;
+}
+
 interface AppContextType {
   hospitals: Hospital[];
   donors: BloodDonor[];
   ambulances: Ambulance[];
+  /** All driver-registered ambulances incl. unverified (admins see all via RLS) */
+  registeredAmbulances: Ambulance[];
   emergencyRequests: EmergencyRequest[];
+  isDataLoading: boolean;
   currentUser: User | null;
+  myDonor: BloodDonor | null;
+  myAmbulance: Ambulance | null;
+  backendConfigured: boolean;
+  authReady: boolean;
   userLocation: UserLocation;
   activeTab: string;
   setActiveTab: (tab: string) => void;
@@ -32,27 +56,35 @@ interface AppContextType {
   navigateToHospitalMap: (hospital: Hospital) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  authModalMode: 'login' | 'register';
+  openAuthModal: (mode?: 'login' | 'register', role?: SelfRegisterRole) => void;
+  authModalRole: SelfRegisterRole;
   isDonorModalOpen: boolean;
   setIsDonorModalOpen: (open: boolean) => void;
   activeEmergency: EmergencyRequest | null;
   setActiveEmergency: (req: EmergencyRequest | null) => void;
   requestEmergencyAssistance: (type: 'ambulance' | 'blood' | 'hospital' | 'icu', details?: Partial<EmergencyRequest>) => EmergencyRequest;
-  updateHospitalFacility: (id: string, updates: Partial<Hospital>) => void;
-  updateAmbulanceStatus: (id: string, status: 'available' | 'busy' | 'offline', etaMinutes?: number) => void;
-  updateDonorProfile: (donorId: string, updates: Partial<BloodDonor>) => void;
-  updateAmbulanceProfile: (ambulanceId: string, updates: Partial<Ambulance>) => void;
-  registerDonor: (donor: Omit<BloodDonor, 'id' | 'distanceKm' | 'verified'>) => void;
-  registerUserAccount: (userData: User, profileData?: { donor?: Partial<BloodDonor>; ambulance?: Partial<Ambulance> }) => void;
-  switchUserRole: (role: UserRole, autoNavigate?: boolean) => void;
+  // Auth
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (input: SignUpInput) => Promise<'signed_in' | 'confirm_email'>;
+  resetPassword: (email: string) => Promise<void>;
+  logout: () => void;
+  // Profiles (persisted to the backend)
+  saveMyDonorProfile: (updates: Partial<BloodDonor>) => Promise<void>;
+  saveMyAmbulanceProfile: (updates: Partial<Ambulance>) => Promise<void>;
+  // Admin
+  updateHospitalStatus: (hospitalId: string, facilities: Partial<HospitalFacilityStatus>, phone?: string) => Promise<void>;
+  verifyEntity: (type: 'donor' | 'ambulance', id: string, verified?: boolean) => Promise<void>;
+  refreshEmergencyRequests: () => Promise<void>;
+  updateEmergencyStatus: (id: string, status: EmergencyRequest['status']) => Promise<void>;
+  // Location
   requestGeolocation: (silent?: boolean) => Promise<boolean>;
   setUserCustomLocation: (lat: number, lng: number, address: string) => void;
-  verifyEntity: (type: 'hospital' | 'donor' | 'ambulance', id: string) => void;
   isLocationModalOpen: boolean;
   setIsLocationModalOpen: (open: boolean) => void;
   isLiveMapSyncing: boolean;
   liveHospitalsCount: number;
   syncLiveNearbyHospitals: (lat?: number, lng?: number) => Promise<void>;
-  logout: () => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
 }
@@ -60,34 +92,96 @@ interface AppContextType {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const DEFAULT_LOCATION: UserLocation = {
-  lat: 23.7500, // Central Dhaka (Dhanmondi / Panthapath area)
-  lng: 90.3850,
+  lat: 23.75, // Central Dhaka (Panthapath area)
+  lng: 90.385,
   address: 'Panthapath, Dhaka (Default Location)',
   isLive: false,
 };
 
-/**
- * Debounced, quota-safe localStorage writer.
- * The hospital list alone is ~1 MB of JSON. Writing it synchronously on every GPS tick
- * (distances change → state changes → JSON.stringify + setItem) froze low-end Android
- * phones and could throw QuotaExceededError. Now writes are batched and run when idle.
- */
-const persistTimers: Record<string, ReturnType<typeof setTimeout>> = {};
-function persistLater(key: string, value: unknown, delayMs = 1500) {
-  clearTimeout(persistTimers[key]);
-  persistTimers[key] = setTimeout(() => {
-    const write = () => {
-      try {
-        localStorage.setItem(key, JSON.stringify(value));
-      } catch (err) {
-        console.warn(`Could not persist ${key}:`, err);
-      }
-    };
-    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
-    if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(write, { timeout: 3000 });
-    else write();
-  }, delayMs);
-}
+const UNKNOWN_FACILITIES: HospitalFacilityStatus = {
+  emergency: 'unknown',
+  icu: 'unknown',
+  nicu: 'unknown',
+  ccu: 'unknown',
+  hdu: 'unknown',
+  ot: 'unknown',
+  bloodBank: 'unknown',
+  oxygen: 'unknown',
+  ventilator: 'unknown',
+  pharmacy: 'unknown',
+};
+
+// Old versions cached ~1.5 MB of (partly invented) data in localStorage — clear it.
+const OBSOLETE_STORAGE_KEYS = [
+  'jibonjatra_hospitals_v8',
+  'jibonjatra_donors_v10',
+  'jibonjatra_ambulances_v8',
+  'jibonjatra_current_user',
+  'jibonjatra_emergency_requests',
+  'medirescue_current_user',
+  'medirescue_emergency_requests',
+];
+
+const dataUrl = (file: string) => `${import.meta.env.BASE_URL}data/${file}`;
+
+// ---------------------------------------------------------------------------
+// Row → app model mappers
+// ---------------------------------------------------------------------------
+const donorFromRow = (r: DonorRow): BloodDonor => ({
+  id: r.id,
+  name: r.name,
+  age: r.age ?? undefined,
+  bloodGroup: r.blood_group as BloodGroup,
+  phone: r.phone,
+  division: r.division || '',
+  district: r.district || '',
+  area: r.area || '',
+  lat: r.lat ?? DEFAULT_LOCATION.lat,
+  lng: r.lng ?? DEFAULT_LOCATION.lng,
+  distanceKm: 0,
+  available: r.available,
+  emergencyEligible: r.available,
+  lastActive: r.updated_at,
+  lastDonationDate: r.last_donation_date || '',
+  donationCount: 0,
+  verified: r.verified,
+  contactPreference: 'call',
+});
+
+const ambulanceFromRow = (r: AmbulanceRow): Ambulance => ({
+  id: r.id,
+  providerName: r.provider_name || r.driver_name,
+  driverName: r.driver_name,
+  phone: r.phone,
+  vehicleType: (r.vehicle_type as Ambulance['vehicleType']) || 'AC Ambulance',
+  regNumber: r.reg_number,
+  locationName: r.location_name || '',
+  lat: r.lat ?? DEFAULT_LOCATION.lat,
+  lng: r.lng ?? DEFAULT_LOCATION.lng,
+  distanceKm: 0,
+  etaMinutes: 0,
+  status: r.status,
+  fareEstimate: '',
+  features: [],
+  lastUpdated: r.updated_at,
+  registered: true,
+  verified: r.verified,
+});
+
+const emergencyFromRow = (r: EmergencyRow): EmergencyRequest => ({
+  id: r.id,
+  type: r.type as EmergencyRequest['type'],
+  patientName: r.patient_name || '',
+  phone: r.phone || '',
+  locationName: r.location_name || '',
+  lat: r.lat ?? 0,
+  lng: r.lng ?? 0,
+  urgency: 'critical',
+  bloodGroup: (r.blood_group as BloodGroup) || undefined,
+  unitsNeeded: r.units_needed ?? undefined,
+  status: (r.status === 'open' ? 'searching' : r.status === 'contacted' ? 'contacted' : 'resolved') as EmergencyRequest['status'],
+  createdAt: r.created_at,
+});
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
@@ -115,85 +209,31 @@ async function reverseGeocode(lat: number, lng: number): Promise<string> {
 }
 
 export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load or initialize state with localStorage backup (v8 includes full DGHS + real map hospitals)
-  const [hospitals, setHospitals] = useState<Hospital[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_hospitals_v8');
-    if (saved) {
-      try {
-        // Drop previously cached live-map entries: older versions stored them with
-        // made-up ICU/NICU "Available" values. They are re-fetched fresh on startup.
-        const parsed = (JSON.parse(saved) as Hospital[]).filter?.(h => !h.id?.startsWith('live-osm-'));
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_HOSPITALS.length) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return INITIAL_HOSPITALS;
-  });
+  // ---------------- Data ----------------
+  const [baseHospitals, setBaseHospitals] = useState<Hospital[]>([]);
+  const [liveHospitals, setLiveHospitals] = useState<Hospital[]>([]);
+  const [hospitalStatus, setHospitalStatus] = useState<Record<string, HospitalStatusRow>>({});
+  const [listedAmbulances, setListedAmbulances] = useState<Ambulance[]>([]);
+  const [registeredAmbulances, setRegisteredAmbulances] = useState<Ambulance[]>([]);
+  const [donorRows, setDonorRows] = useState<BloodDonor[]>([]);
+  const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequest[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
 
-  const [donors, setDonors] = useState<BloodDonor[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_donors_v10');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_BLOOD_DONORS.length) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return INITIAL_BLOOD_DONORS;
-  });
-
-  const [ambulances, setAmbulances] = useState<Ambulance[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_ambulances_v8');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= INITIAL_AMBULANCES.length) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return INITIAL_AMBULANCES;
-  });
-
-  const [emergencyRequests, setEmergencyRequests] = useState<EmergencyRequest[]>(() => {
-    const saved = localStorage.getItem('jibonjatra_emergency_requests') || localStorage.getItem('medirescue_emergency_requests');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('jibonjatra_current_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && parsed.id && parsed.role) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error('Error reading stored user:', e);
-      }
-    }
-    return null;
-  });
+  // ---------------- Auth ----------------
+  const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [myDonor, setMyDonor] = useState<BloodDonor | null>(null);
+  const [myAmbulance, setMyAmbulance] = useState<Ambulance | null>(null);
+  const [authReady, setAuthReady] = useState(!isBackendConfigured);
 
   const [userLocation, setUserLocation] = useState<UserLocation>(() => {
-    const saved = localStorage.getItem('jibonjatra_user_location');
-    if (saved) {
-      try {
+    try {
+      const saved = localStorage.getItem('jibonjatra_user_location');
+      if (saved) {
         const parsed = JSON.parse(saved);
-        if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') {
-          return parsed;
-        }
-      } catch (e) {
-        console.error('Error reading stored location:', e);
+        if (typeof parsed.lat === 'number' && typeof parsed.lng === 'number') return parsed;
       }
+    } catch {
+      // ignore
     }
     return DEFAULT_LOCATION;
   });
@@ -204,6 +244,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isEmergencyModeOpen, setIsEmergencyModeOpen] = useState<boolean>(false);
   const [selectedHospital, setSelectedHospital] = useState<Hospital | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'register'>('login');
+  const [authModalRole, setAuthModalRole] = useState<SelfRegisterRole>('donor');
   const [isDonorModalOpen, setIsDonorModalOpen] = useState<boolean>(false);
   const [isLocationModalOpen, setIsLocationModalOpen] = useState<boolean>(false);
   const [activeEmergency, setActiveEmergency] = useState<EmergencyRequest | null>(null);
@@ -211,41 +253,230 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isLiveMapSyncing, setIsLiveMapSyncing] = useState<boolean>(false);
   const [liveHospitalsCount, setLiveHospitalsCount] = useState<number>(0);
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(prev => (prev === msg ? null : prev));
     }, 4500);
+  }, []);
+
+  const openAuthModal = (mode: 'login' | 'register' = 'login', role: SelfRegisterRole = 'donor') => {
+    setAuthModalMode(mode);
+    setAuthModalRole(role);
+    setIsAuthModalOpen(true);
   };
 
-  // Sync to local storage
+  // ---------------- Initial data load ----------------
   useEffect(() => {
-    persistLater('jibonjatra_hospitals_v8', hospitals);
-  }, [hospitals]);
+    OBSOLETE_STORAGE_KEYS.forEach(k => {
+      try {
+        localStorage.removeItem(k);
+      } catch {
+        // ignore
+      }
+    });
 
-  useEffect(() => {
-    persistLater('jibonjatra_donors_v10', donors);
-  }, [donors]);
+    let cancelled = false;
+    const loadJson = async <T,>(file: string): Promise<T[]> => {
+      try {
+        const res = await fetch(dataUrl(file));
+        if (!res.ok) throw new Error(String(res.status));
+        return (await res.json()) as T[];
+      } catch (err) {
+        console.warn(`Could not load ${file}:`, err);
+        return [];
+      }
+    };
 
-  useEffect(() => {
-    persistLater('jibonjatra_ambulances_v8', ambulances);
-  }, [ambulances]);
+    Promise.all([loadJson<Hospital>('hospitals.json'), loadJson<Ambulance>('ambulances.json')]).then(([h, a]) => {
+      if (cancelled) return;
+      setBaseHospitals(h);
+      setListedAmbulances(a.map(x => ({ ...x, registered: false, verified: false })));
+      setIsDataLoading(false);
+    });
 
-  useEffect(() => {
-    localStorage.setItem('jibonjatra_emergency_requests', JSON.stringify(emergencyRequests));
-  }, [emergencyRequests]);
-
-  useEffect(() => {
-    if (currentUser) {
-      localStorage.setItem('jibonjatra_current_user', JSON.stringify(currentUser));
-    } else {
-      localStorage.removeItem('jibonjatra_current_user');
-      localStorage.removeItem('medirescue_current_user');
+    if (isBackendConfigured) {
+      db.listHospitalStatus()
+        .then(rows => !cancelled && setHospitalStatus(Object.fromEntries(rows.map(r => [r.hospital_id, r]))))
+        .catch(err => console.warn('hospital_status load failed:', err));
+      db.listDonors()
+        .then(rows => !cancelled && setDonorRows(rows.map(donorFromRow)))
+        .catch(err => console.warn('donors load failed:', err));
+      db.listAmbulances()
+        .then(rows => !cancelled && setRegisteredAmbulances(rows.map(ambulanceFromRow)))
+        .catch(err => console.warn('ambulances load failed:', err));
     }
-  }, [currentUser]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---------------- Auth session ----------------
+  const loadAccount = useCallback(async (userId: string) => {
+    const p = await db.getMyProfile(userId);
+    setProfile(p);
+    const [donorList, ambList] = await Promise.all([
+      db.listDonors().catch(() => [] as DonorRow[]),
+      db.listAmbulances().catch(() => [] as AmbulanceRow[]),
+    ]);
+    setDonorRows(donorList.map(donorFromRow));
+    setRegisteredAmbulances(ambList.map(ambulanceFromRow));
+    const d = donorList.find(r => r.user_id === userId);
+    const a = ambList.find(r => r.user_id === userId);
+    setMyDonor(d ? donorFromRow(d) : null);
+    setMyAmbulance(a ? ambulanceFromRow(a) : null);
+  }, []);
 
   useEffect(() => {
-    persistLater('jibonjatra_user_location', userLocation, 300);
+    if (!isBackendConfigured) return;
+    auth
+      .getSession()
+      .then(async s => {
+        if (s) await loadAccount(s.user.id);
+      })
+      .catch(err => console.warn('Session restore failed:', err))
+      .finally(() => setAuthReady(true));
+  }, [loadAccount]);
+
+  const signIn = async (email: string, password: string) => {
+    const s = await auth.signIn(email, password);
+    await loadAccount(s.user.id);
+    showToast('✅ সফলভাবে লগইন হয়েছে');
+  };
+
+  const signUp = async (input: SignUpInput): Promise<'signed_in' | 'confirm_email'> => {
+    const s = await auth.signUp(input);
+    if (!s) return 'confirm_email';
+    await loadAccount(s.user.id);
+    showToast(`স্বাগতম ${input.name}! আপনার অ্যাকাউন্ট তৈরি হয়েছে।`);
+    return 'signed_in';
+  };
+
+  const resetPassword = (email: string) => auth.resetPassword(email);
+
+  const logout = () => {
+    auth.signOut();
+    setProfile(null);
+    setMyDonor(null);
+    setMyAmbulance(null);
+    setEmergencyRequests([]);
+    setActiveTab('home');
+    showToast('👋 সফলভাবে লগআউট করা হয়েছে');
+  };
+
+  const currentUser: User | null = useMemo(() => {
+    if (!profile) return null;
+    return {
+      id: profile.id,
+      name: profile.name || profile.email.split('@')[0],
+      email: profile.email,
+      phone: profile.phone,
+      role: profile.role,
+      donorId: myDonor?.id,
+      ambulanceId: myAmbulance?.id,
+      age: myDonor?.age,
+      bloodGroup: myDonor?.bloodGroup,
+      area: myDonor?.area,
+      lastDonationDate: myDonor?.lastDonationDate,
+      regNumber: myAmbulance?.regNumber,
+      locationName: myAmbulance?.locationName,
+    };
+  }, [profile, myDonor, myAmbulance]);
+
+  // ---------------- Profile saving ----------------
+  const saveMyDonorProfile = async (updates: Partial<BloodDonor>) => {
+    if (!profile) throw new Error('আগে লগইন করুন।');
+    const row = await db.upsertMyDonor({
+      user_id: profile.id,
+      name: updates.name ?? myDonor?.name ?? profile.name,
+      phone: updates.phone ?? myDonor?.phone ?? profile.phone,
+      blood_group: updates.bloodGroup ?? myDonor?.bloodGroup ?? 'O+',
+      age: updates.age ?? myDonor?.age ?? null,
+      division: updates.division ?? myDonor?.division ?? null,
+      district: updates.district ?? myDonor?.district ?? null,
+      area: updates.area ?? myDonor?.area ?? null,
+      lat: updates.lat ?? myDonor?.lat ?? userLocation.lat,
+      lng: updates.lng ?? myDonor?.lng ?? userLocation.lng,
+      available: updates.available ?? myDonor?.available ?? true,
+      last_donation_date: (updates.lastDonationDate ?? myDonor?.lastDonationDate) || null,
+    });
+    const d = donorFromRow(row);
+    setMyDonor(d);
+    setDonorRows(prev => [d, ...prev.filter(x => x.id !== d.id)]);
+    showToast('✅ রক্তদাতার প্রোফাইল সেভ হয়েছে');
+  };
+
+  const saveMyAmbulanceProfile = async (updates: Partial<Ambulance>) => {
+    if (!profile) throw new Error('আগে লগইন করুন।');
+    const row = await db.upsertMyAmbulance({
+      user_id: profile.id,
+      provider_name: updates.providerName ?? myAmbulance?.providerName ?? profile.name,
+      driver_name: updates.driverName ?? myAmbulance?.driverName ?? profile.name,
+      phone: updates.phone ?? myAmbulance?.phone ?? profile.phone,
+      vehicle_type: updates.vehicleType ?? myAmbulance?.vehicleType ?? 'AC Ambulance',
+      reg_number: updates.regNumber ?? myAmbulance?.regNumber ?? '',
+      location_name: updates.locationName ?? myAmbulance?.locationName ?? null,
+      lat: updates.lat ?? myAmbulance?.lat ?? userLocation.lat,
+      lng: updates.lng ?? myAmbulance?.lng ?? userLocation.lng,
+      status: (updates.status && updates.status !== 'unknown' ? updates.status : myAmbulance?.status !== 'unknown' ? myAmbulance?.status : undefined) || 'available',
+    });
+    const a = ambulanceFromRow(row);
+    setMyAmbulance(a);
+    setRegisteredAmbulances(prev => [a, ...prev.filter(x => x.id !== a.id)]);
+    showToast(a.verified ? '✅ অ্যাম্বুলেন্সের তথ্য আপডেট হয়েছে' : '✅ সেভ হয়েছে — অ্যাডমিন যাচাই করার পর পাবলিক তালিকায় দেখাবে');
+  };
+
+  // ---------------- Admin ----------------
+  const updateHospitalStatus = async (hospitalId: string, facilities: Partial<HospitalFacilityStatus>, phone?: string) => {
+    const merged = { ...(hospitalStatus[hospitalId]?.facilities || {}), ...facilities } as Record<string, string>;
+    await db.upsertHospitalStatus({
+      hospital_id: hospitalId,
+      facilities: merged,
+      phone: phone !== undefined ? phone || null : hospitalStatus[hospitalId]?.phone ?? null,
+    });
+    setHospitalStatus(prev => ({
+      ...prev,
+      [hospitalId]: {
+        hospital_id: hospitalId,
+        facilities: merged,
+        bed_stock: null,
+        phone: phone !== undefined ? phone || null : prev[hospitalId]?.phone ?? null,
+        updated_at: new Date().toISOString(),
+      },
+    }));
+    showToast('✅ হাসপাতালের স্ট্যাটাস আপডেট হয়েছে');
+  };
+
+  const verifyEntity = async (type: 'donor' | 'ambulance', id: string, verified: boolean = true) => {
+    await db.setVerified(type === 'donor' ? 'donors' : 'ambulances', id, verified);
+    if (type === 'donor') setDonorRows(prev => prev.map(d => (d.id === id ? { ...d, verified } : d)));
+    else setRegisteredAmbulances(prev => prev.map(a => (a.id === id ? { ...a, verified } : a)));
+    showToast(verified ? '✅ যাচাই করা হয়েছে' : 'যাচাই বাতিল করা হয়েছে');
+  };
+
+  const refreshEmergencyRequests = useCallback(async () => {
+    if (!isBackendConfigured || !profile) return;
+    const rows = await db.listEmergencies();
+    setEmergencyRequests(rows.map(emergencyFromRow));
+  }, [profile]);
+
+  useEffect(() => {
+    if (profile?.role === 'admin') refreshEmergencyRequests().catch(err => console.warn(err));
+  }, [profile, refreshEmergencyRequests]);
+
+  const updateEmergencyStatus = async (id: string, status: EmergencyRequest['status']) => {
+    const dbStatus = status === 'searching' ? 'open' : status === 'contacted' ? 'contacted' : 'resolved';
+    await db.updateEmergencyStatus(id, dbStatus);
+    setEmergencyRequests(prev => prev.map(e => (e.id === id ? { ...e, status } : e)));
+  };
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('jibonjatra_user_location', JSON.stringify(userLocation));
+    } catch {
+      // ignore
+    }
   }, [userLocation]);
 
   // GPS bookkeeping refs (no re-render needed)
@@ -380,7 +611,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     try {
       const liveNearby = await fetchLiveNearbyHospitals(targetLat, targetLng);
       if (liveNearby && liveNearby.length > 0) {
-        setHospitals(prev => mergeWithLiveHospitals(prev, liveNearby));
+        setLiveHospitals(liveNearby);
         setLiveHospitalsCount(liveNearby.length);
       }
     } catch (err) {
@@ -390,58 +621,59 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  // Recalculate distances and auto-sync live map hospitals whenever user location changes
+  // Auto discover real nearby map facilities — only after moving ~1 km (network call)
   useEffect(() => {
-    setHospitals(prev =>
-      prev.map(h => ({
-        ...h,
-        distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, h.lat, h.lng),
-      }))
-    );
-
-    setDonors(prev =>
-      prev.map(d => ({
-        ...d,
-        distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, d.lat, d.lng),
-      }))
-    );
-
-    setAmbulances(prev =>
-      prev.map(a => {
-        const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, a.lat, a.lng);
-        // Estimate approx 2.5 mins per km in Dhaka traffic + 2 mins prep
-        const estimatedEta = Math.max(3, Math.round(dist * 2.5 + 2));
-        return {
-          ...a,
-          distanceKm: dist,
-          etaMinutes: a.status === 'available' ? estimatedEta : a.etaMinutes,
-        };
-      })
-    );
-
-    // Auto discover real nearby map facilities — only after moving ~1 km (network call)
     const lastSync = lastSyncRef.current;
     if (!lastSync || calculateDistanceKm(lastSync.lat, lastSync.lng, userLocation.lat, userLocation.lng) >= 1) {
       lastSyncRef.current = { lat: userLocation.lat, lng: userLocation.lng };
       syncLiveNearbyHospitals(userLocation.lat, userLocation.lng);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userLocation.lat, userLocation.lng]);
 
   const setUserCustomLocation = (lat: number, lng: number, address: string) => {
     manualAreaRef.current = true;
     lastGeocodedRef.current = { lat, lng };
-    setUserLocation({
-      lat,
-      lng,
-      address,
-      isLive: false,
-    });
-    showToast(`📍 এলাকা সেট করা হয়েছে: ${address}`);
+    setUserLocation({ lat, lng, address, isLive: false });
+    showToast(`📍 এলাকা সেট করা হয়েছে: ${address}`);
   };
+
+  // ---------------- Derived lists (distance is computed, not stored) ----------------
+  const hospitals = useMemo(() => {
+    const merged = liveHospitals.length ? mergeWithLiveHospitals(baseHospitals, liveHospitals) : baseHospitals;
+    return merged.map(h => {
+      const st = hospitalStatus[h.id];
+      return {
+        ...h,
+        facilities: st ? { ...UNKNOWN_FACILITIES, ...(st.facilities as Partial<HospitalFacilityStatus>) } : h.facilities || UNKNOWN_FACILITIES,
+        emergencyHotline: st?.phone || h.emergencyHotline,
+        statusUpdatedAt: st?.updated_at,
+        distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, h.lat, h.lng),
+      };
+    });
+  }, [baseHospitals, liveHospitals, hospitalStatus, userLocation.lat, userLocation.lng]);
+
+  const donors = useMemo(
+    () =>
+      donorRows.map(d => ({
+        ...d,
+        distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, d.lat, d.lng),
+      })),
+    [donorRows, userLocation.lat, userLocation.lng]
+  );
+
+  const ambulances = useMemo(() => {
+    // Registered + verified services first (they have live status), then public listings
+    const visibleRegistered = registeredAmbulances.filter(a => a.verified);
+    return [...visibleRegistered, ...listedAmbulances].map(a => {
+      const dist = calculateDistanceKm(userLocation.lat, userLocation.lng, a.lat, a.lng);
+      // Rough Dhaka traffic estimate: ~2.5 min per km + 2 min preparation
+      return { ...a, distanceKm: dist, etaMinutes: Math.max(3, Math.round(dist * 2.5 + 2)) };
+    });
+  }, [registeredAmbulances, listedAmbulances, userLocation.lat, userLocation.lng]);
 
   /**
    * Directly focus a hospital on the interactive map and switch view mode.
-   * This solves: "View Full Map & Options click korle map-e hospital-er real location show korbe"
    */
   const navigateToHospitalMap = (hospital: Hospital) => {
     setFocusedHospital(hospital);
@@ -452,236 +684,21 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
-  const switchUserRole = (role: UserRole, autoNavigate: boolean = true) => {
-    const found = INITIAL_USERS.find(u => u.role === role);
-    if (found) {
-      setCurrentUser(found);
-    } else {
-      setCurrentUser({
-        id: `user-${Date.now()}`,
-        name: `${role.toUpperCase()} User`,
-        email: `${role}@jibonjatra.bd`,
-        phone: '+880 1711 000000',
-        role,
-      });
-    }
-
-    let targetView = 'ড্যাশবোর্ড';
-    if (autoNavigate) {
-      if (role === 'ambulance') {
-        setActiveTab('dashboard');
-        targetView = 'অ্যাম্বুলেন্স ড্রাইভার পোর্টাল';
-      } else if (role === 'admin') {
-        setActiveTab('admin');
-        targetView = 'ডিজিএইচএস সিস্টেম অ্যাডমিন কন্ট্রোল সেন্টার';
-      } else if (role === 'donor') {
-        setActiveTab('dashboard');
-        targetView = 'রক্তদাতা প্রোফাইল ড্যাশবোর্ড';
-      } else {
-        setActiveTab('home');
-        targetView = 'হোম পেজ';
-      }
-    }
-
-    showToast(`সফলভাবে ${targetView}-এ লগইন হয়েছে`);
-  };
-
-  const logout = () => {
-    setCurrentUser(null);
-    localStorage.removeItem('jibonjatra_current_user');
-    localStorage.removeItem('medirescue_current_user');
-    setActiveTab('home');
-    showToast('👋 সফলভাবে লগআউট করা হয়েছে');
-  };
-
-  const updateDonorProfile = (donorId: string, updates: Partial<BloodDonor>) => {
-    setDonors(prev =>
-      prev.map(d => {
-        if (d.id === donorId) {
-          return {
-            ...d,
-            ...updates,
-            lastActive: 'Just now',
-          };
-        }
-        return d;
-      })
-    );
-
-    // Keep currentUser in sync
-    setCurrentUser(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        ...updates,
-        phone: updates.phone || prev.phone,
-        bloodGroup: updates.bloodGroup || prev.bloodGroup,
-        age: updates.age ?? prev.age,
-        area: updates.area || prev.area,
-        lastDonationDate: updates.lastDonationDate || prev.lastDonationDate,
-      };
-    });
-
-    showToast('✅ রক্তদাতার তথ্য (বয়স, গ্রুপ, ফোন, এলাকা ও শেষ রক্তদান) সফলভাবে আপডেট হয়েছে!');
-  };
-
-  const updateAmbulanceProfile = (ambulanceId: string, updates: Partial<Ambulance>) => {
-    setAmbulances(prev =>
-      prev.map(a => {
-        if (a.id === ambulanceId) {
-          return {
-            ...a,
-            ...updates,
-            lastUpdated: 'Just now',
-          };
-        }
-        return a;
-      })
-    );
-
-    // Keep currentUser in sync
-    setCurrentUser(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        phone: updates.phone || prev.phone,
-        regNumber: updates.regNumber || prev.regNumber,
-        locationName: updates.locationName || prev.locationName,
-      };
-    });
-
-    showToast('✅ অ্যাম্বুলেন্সের গাড়ির নম্বর, ফোন নম্বর ও লোকেশন সফলভাবে আপডেট হয়েছে!');
-  };
-
-  const registerUserAccount = (
-    userData: User,
-    profileData?: { donor?: Partial<BloodDonor>; ambulance?: Partial<Ambulance> }
-  ) => {
-    if (userData.role === 'donor') {
-      const newDonorId = `donor-${Date.now()}`;
-      const newDonor: BloodDonor = {
-        id: newDonorId,
-        name: userData.name,
-        age: userData.age || 25,
-        bloodGroup: userData.bloodGroup || 'O+',
-        phone: userData.phone,
-        division: 'Dhaka',
-        district: 'Dhaka',
-        area: userData.area || 'Dhanmondi, Dhaka',
-        lat: userLocation.lat,
-        lng: userLocation.lng,
-        distanceKm: 0,
-        available: true,
-        emergencyEligible: true,
-        lastActive: 'Just now',
-        lastDonationDate: userData.lastDonationDate || new Date().toISOString().split('T')[0],
-        donationCount: 1,
-        verified: true,
-        contactPreference: 'both',
-        ...profileData?.donor,
-      };
-      setDonors(prev => [newDonor, ...prev]);
-      const finalUser: User = { ...userData, id: `user-${Date.now()}`, donorId: newDonorId };
-      setCurrentUser(finalUser);
-      setActiveTab('dashboard');
-      showToast(`স্বাগতম ${userData.name}! আপনার রক্তদাতা একাউন্ট তৈরি হয়েছে।`);
-    } else if (userData.role === 'ambulance') {
-      const newAmbId = `amb-${Date.now()}`;
-      const newAmb: Ambulance = {
-        id: newAmbId,
-        providerName: userData.name + ' Emergency Dispatch',
-        driverName: userData.name,
-        phone: userData.phone,
-        vehicleType: 'AC Ambulance',
-        regNumber: userData.regNumber || 'Dhaka Metro-Cha-11-2024',
-        locationName: userData.locationName || 'Panthapath Standby Point, Dhaka',
-        lat: userLocation.lat,
-        lng: userLocation.lng,
-        distanceKm: 0,
-        etaMinutes: 5,
-        status: 'available',
-        fareEstimate: 'Standard Rate',
-        features: ['Oxygen Support', 'First Aid Kit'],
-        lastUpdated: 'Just now',
-        ...profileData?.ambulance,
-      };
-      setAmbulances(prev => [newAmb, ...prev]);
-      const finalUser: User = { ...userData, id: `user-${Date.now()}`, ambulanceId: newAmbId };
-      setCurrentUser(finalUser);
-      setActiveTab('dashboard');
-      showToast(`স্বাগতম ${userData.name}! আপনার অ্যাম্বুলেন্স চালক একাউন্ট তৈরি হয়েছে।`);
-    } else {
-      const finalUser: User = { ...userData, id: `user-${Date.now()}`, role: 'admin' };
-      setCurrentUser(finalUser);
-      setActiveTab('admin');
-      showToast(`স্বাগতম! আপনি সিস্টেম অ্যাডমিন হিসেবে যুক্ত হয়েছেন।`);
-    }
-  };
-
-  const updateHospitalFacility = (id: string, updates: Partial<Hospital>) => {
-    setHospitals(prev =>
-      prev.map(h => {
-        if (h.id === id) {
-          return {
-            ...h,
-            ...updates,
-            lastUpdated: 'Just now (Staff updated)',
-          };
-        }
-        return h;
-      })
-    );
-  };
-
-  const updateAmbulanceStatus = (id: string, status: 'available' | 'busy' | 'offline', etaMinutes?: number) => {
-    setAmbulances(prev =>
-      prev.map(a => {
-        if (a.id === id) {
-          return {
-            ...a,
-            status,
-            etaMinutes: etaMinutes ?? a.etaMinutes,
-            lastUpdated: 'Just now',
-          };
-        }
-        return a;
-      })
-    );
-  };
-
-  const registerDonor = (donorData: Omit<BloodDonor, 'id' | 'distanceKm' | 'verified'>) => {
-    const newDonor: BloodDonor = {
-      ...donorData,
-      id: `donor-${Date.now()}`,
-      distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, donorData.lat, donorData.lng),
-      verified: false, // Requires admin verification
-    };
-    setDonors(prev => [newDonor, ...prev]);
-  };
-
-  const verifyEntity = (type: 'hospital' | 'donor' | 'ambulance', id: string) => {
-    if (type === 'hospital') {
-      setHospitals(prev => prev.map(h => h.id === id ? { ...h, verified: true, mohfwVerified: true } : h));
-    } else if (type === 'donor') {
-      setDonors(prev => prev.map(d => d.id === id ? { ...d, verified: true } : d));
-    } else if (type === 'ambulance') {
-      // mark verified
-      alert(`Ambulance service ${id} verified by System Admin!`);
-    }
-  };
-
+  /**
+   * Emergency help: suggests the nearest relevant resource for the user to CALL.
+   * Nothing is "dispatched" automatically — the request is logged so admins can follow up.
+   */
   const requestEmergencyAssistance = (
     type: 'ambulance' | 'blood' | 'hospital' | 'icu',
     details?: Partial<EmergencyRequest>
   ): EmergencyRequest => {
-    // Pick nearest relevant resource
-    let assignedName = 'Central Dispatch 999';
+    let assignedName = 'National Emergency Service';
     let assignedPhone = '999';
-    let eta = 5;
+    let eta: number | undefined;
 
     if (type === 'ambulance') {
       const nearestAmb = [...ambulances]
-        .filter(a => a.status === 'available')
+        .filter(a => a.status === 'available' || a.status === 'unknown')
         .sort((a, b) => a.distanceKm - b.distanceKm)[0];
       if (nearestAmb) {
         assignedName = nearestAmb.providerName;
@@ -692,23 +709,24 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       const nearestHosp = [...hospitals].sort((a, b) => a.distanceKm - b.distanceKm)[0];
       if (nearestHosp) {
         assignedName = nearestHosp.name;
-        assignedPhone = nearestHosp.emergencyHotline;
+        assignedPhone = nearestHosp.emergencyHotline || '999';
         eta = Math.round(nearestHosp.distanceKm * 3 + 4);
       }
     } else if (type === 'blood') {
-      const matchedDonor = donors.find(d => d.available && (!details?.bloodGroup || d.bloodGroup === details.bloodGroup));
+      const matchedDonor = [...donors]
+        .filter(d => d.available && (!details?.bloodGroup || d.bloodGroup === details.bloodGroup))
+        .sort((a, b) => a.distanceKm - b.distanceKm)[0];
       if (matchedDonor) {
         assignedName = `Donor: ${matchedDonor.name} (${matchedDonor.bloodGroup})`;
         assignedPhone = matchedDonor.phone;
-        eta = 15;
       }
     }
 
     const newRequest: EmergencyRequest = {
       id: `EMG-${Date.now().toString().slice(-6)}`,
       type,
-      patientName: currentUser?.name || 'Emergency Patient',
-      phone: currentUser?.phone || '+880 1711 000000',
+      patientName: currentUser?.name || '',
+      phone: currentUser?.phone || '',
       locationName: userLocation.address,
       lat: userLocation.lat,
       lng: userLocation.lng,
@@ -723,7 +741,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       ...details,
     };
 
-    setEmergencyRequests(prev => [newRequest, ...prev]);
+    // Log to the backend so admins can follow up (fire-and-forget; never blocks the user)
+    if (isBackendConfigured) {
+      db.createEmergency({
+        type,
+        patient_name: newRequest.patientName || null,
+        phone: newRequest.phone || null,
+        blood_group: newRequest.bloodGroup || null,
+        units_needed: newRequest.unitsNeeded ?? null,
+        location_name: newRequest.locationName,
+        lat: newRequest.lat,
+        lng: newRequest.lng,
+      }).catch(err => console.warn('Emergency log failed:', err));
+    }
+
     setActiveEmergency(newRequest);
     return newRequest;
   };
@@ -734,8 +765,14 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         hospitals,
         donors,
         ambulances,
+        registeredAmbulances,
         emergencyRequests,
+        isDataLoading,
         currentUser,
+        myDonor,
+        myAmbulance,
+        backendConfigured: isBackendConfigured,
+        authReady,
         userLocation,
         activeTab,
         setActiveTab,
@@ -750,6 +787,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         navigateToHospitalMap,
         isAuthModalOpen,
         setIsAuthModalOpen,
+        authModalMode,
+        authModalRole,
+        openAuthModal,
         isDonorModalOpen,
         setIsDonorModalOpen,
         isLocationModalOpen,
@@ -757,17 +797,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         activeEmergency,
         setActiveEmergency,
         requestEmergencyAssistance,
-        updateHospitalFacility,
-        updateAmbulanceStatus,
-        updateDonorProfile,
-        updateAmbulanceProfile,
-        registerDonor,
-        registerUserAccount,
-        switchUserRole,
+        signIn,
+        signUp,
+        resetPassword,
         logout,
+        saveMyDonorProfile,
+        saveMyAmbulanceProfile,
+        updateHospitalStatus,
+        verifyEntity,
+        refreshEmergencyRequests,
+        updateEmergencyStatus,
         requestGeolocation,
         setUserCustomLocation,
-        verifyEntity,
         isLiveMapSyncing,
         liveHospitalsCount,
         syncLiveNearbyHospitals,

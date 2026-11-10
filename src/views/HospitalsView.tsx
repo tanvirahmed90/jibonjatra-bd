@@ -102,9 +102,9 @@ export const HospitalsView: React.FC = () => {
         <div>
           <div className="flex items-center gap-2 mb-1">
             <span className="text-xs font-bold text-red-600 uppercase tracking-wider bg-red-50 px-2 py-0.5 rounded">
-              Verified Healthcare Facilities
+              DGHS Registry &amp; Map Facilities
             </span>
-            <span className="text-xs text-slate-500">24/7 Verified Healthcare Network</span>
+            <span className="text-xs text-slate-500">DGHS registry + OpenStreetMap</span>
           </div>
           <h1 className="font-display font-black text-2xl sm:text-4xl text-slate-900">
             Emergency Hospitals & Trauma Centers

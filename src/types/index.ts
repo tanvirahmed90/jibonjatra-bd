@@ -58,6 +58,10 @@ export interface Hospital {
   mohfwVerified: boolean;
   notes?: string;
   areaTags?: string[];
+  /** Coordinates are area-level estimates (registry data), not the exact building */
+  locationApprox?: boolean;
+  /** ISO time of the last admin-confirmed status update (from hospital_status) */
+  statusUpdatedAt?: string;
 }
 
 export interface BloodDonor {
@@ -93,7 +97,11 @@ export interface Ambulance {
   lng: number;
   distanceKm: number;
   etaMinutes: number;
-  status: 'available' | 'busy' | 'offline';
+  /** 'unknown' = listed service whose live status we don't know (call to confirm) */
+  status: 'available' | 'busy' | 'offline' | 'unknown';
+  /** true = registered & admin-verified on JibonJatra; false = public business listing */
+  registered?: boolean;
+  verified?: boolean;
   hospitalAffiliation?: string;
   fareEstimate: string;
   features: string[];

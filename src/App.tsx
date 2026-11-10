@@ -1,11 +1,10 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
 import { Footer } from './components/Footer';
 import { EmergencyRequestModal } from './components/EmergencyRequestModal';
 import { HospitalDetailsModal } from './components/HospitalDetailsModal';
-import { DonorRegisterModal } from './components/DonorRegisterModal';
 import { AuthModal } from './components/AuthModal';
 import { LocationPickerModal } from './components/LocationPickerModal';
 
@@ -33,7 +32,22 @@ const MainContent: React.FC = () => {
     isLocationModalOpen,
     setIsLocationModalOpen,
     toastMessage,
+    openAuthModal,
+    setActiveTab,
   } = useApp();
+
+  // "Become a donor" → donors manage their profile from their own account (real login),
+  // so send logged-in users to their profile and everyone else to registration.
+  useEffect(() => {
+    if (!isDonorModalOpen) return;
+    setIsDonorModalOpen(false);
+    if (currentUser) {
+      setActiveTab('dashboard');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      openAuthModal('register', 'donor');
+    }
+  }, [isDonorModalOpen, currentUser, setIsDonorModalOpen, openAuthModal, setActiveTab]);
 
   const renderActiveView = () => {
     switch (activeTab) {
@@ -103,10 +117,6 @@ const MainContent: React.FC = () => {
         onClose={() => setSelectedHospital(null)}
       />
 
-      <DonorRegisterModal
-        isOpen={isDonorModalOpen}
-        onClose={() => setIsDonorModalOpen(false)}
-      />
 
       <AuthModal
         isOpen={isAuthModalOpen}

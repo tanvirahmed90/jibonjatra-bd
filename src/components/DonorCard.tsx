@@ -13,7 +13,7 @@ export const DonorCard: React.FC<DonorCardProps> = ({ donor, onRequestBlood }) =
   const [showFullPhone, setShowFullPhone] = useState(false);
 
   // Mask phone number for privacy until caller clicks to reveal or call
-  const maskedPhone = donor.phone.slice(0, 9) + ' ••••';
+  const maskedPhone = donor.phone.slice(0, Math.max(0, donor.phone.length - 4)) + '••••';
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 p-4 shadow-card-soft hover:shadow-card-hover transition-all duration-200 flex flex-col justify-between gap-3">
@@ -63,17 +63,13 @@ export const DonorCard: React.FC<DonorCardProps> = ({ donor, onRequestBlood }) =
         </div>
       </div>
 
-      {/* Stats & Last Active */}
-      <div className="grid grid-cols-2 gap-2 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-slate-600">
-        <div className="flex items-center gap-1.5">
+      {/* Last donation (entered by the donor) */}
+      {donor.lastDonationDate && (
+        <div className="flex items-center gap-1.5 text-xs bg-slate-50 p-2.5 rounded-xl border border-slate-100 text-slate-600">
           <Clock className="w-3.5 h-3.5 text-slate-400" />
-          <span>Active: <strong>{donor.lastActive}</strong></span>
+          <span>সর্বশেষ রক্তদান: <strong>{donor.lastDonationDate}</strong></span>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Droplet className="w-3.5 h-3.5 text-red-500" />
-          <span>Donations: <strong>{donor.donationCount} times</strong></span>
-        </div>
-      </div>
+      )}
 
       {/* Emergency readiness note */}
       {donor.emergencyEligible && (
@@ -108,14 +104,14 @@ export const DonorCard: React.FC<DonorCardProps> = ({ donor, onRequestBlood }) =
           <span>CALL</span>
         </a>
 
-        <button
-          type="button"
+        <a
+          href={`sms:${donor.phone}?body=${encodeURIComponent(`জরুরি রক্ত প্রয়োজন: ${donor.bloodGroup}. JibonJatra BD থেকে আপনার নম্বর পেয়েছি। অনুগ্রহ করে কল ব্যাক করুন।`)}`}
           onClick={() => onRequestBlood(donor)}
           className="flex items-center justify-center gap-1.5 bg-rose-50 hover:bg-rose-100 active:scale-95 text-rose-800 font-semibold py-2.5 px-3 rounded-xl text-xs border border-rose-200 transition-all"
         >
           <MessageSquare className="w-3.5 h-3.5 text-rose-600" />
-          <span>REQUEST BLOOD</span>
-        </button>
+          <span>SMS পাঠান</span>
+        </a>
       </div>
     </div>
   );

@@ -38,7 +38,7 @@ export const AmbulanceView: React.FC = () => {
       assignedEntityPhone: amb.phone,
       etaMinutes: amb.etaMinutes,
     });
-    setDispatchAlert(`Emergency alert dispatched to ${amb.providerName}! Driver ${amb.driverName} has been notified with your GPS coordinates.`);
+    setDispatchAlert(`${amb.providerName}-কে সরাসরি কল করুন। কল করার পর "Share My Location" দিয়ে আপনার লোকেশন পাঠাতে পারেন।`);
     setTimeout(() => setDispatchAlert(null), 6000);
   };
 
@@ -117,7 +117,7 @@ export const AmbulanceView: React.FC = () => {
               onChange={(e) => setAvailableOnly(e.target.checked)}
               className="rounded text-red-600 focus:ring-red-500"
             />
-            <span>Show Only 🟢 Ready Ambulances</span>
+            <span>শুধু 🟢 Available (যাচাইকৃত সেবা)</span>
           </label>
         </div>
       </div>
@@ -126,7 +126,7 @@ export const AmbulanceView: React.FC = () => {
       <div>
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-display font-bold text-lg text-slate-900">
-            Nearby Ambulances on Standby ({sortedAmbulances.length})
+            Nearby Ambulance Services ({sortedAmbulances.length})
           </h2>
           <span className="text-xs text-slate-500">Sorted by quickest ETA</span>
         </div>
@@ -156,7 +156,6 @@ export const AmbulanceView: React.FC = () => {
               <AmbulanceCard
                 key={amb.id}
                 ambulance={amb}
-                onBookDispatch={handleInstantDispatch}
               />
             ))}
           </div>

@@ -15,27 +15,17 @@ import {
 } from 'lucide-react';
 
 export const DonorDashboard: React.FC = () => {
-  const { donors, updateDonorProfile, currentUser } = useApp();
+  const { myDonor, saveMyDonorProfile, currentUser, userLocation } = useApp();
+  const isNewProfile = !myDonor;
 
-  // Find logged-in donor profile
-  const myDonor: BloodDonor =
-    (currentUser && donors.find(d => d.id === currentUser.donorId || d.phone === currentUser.phone)) ||
-    donors[0];
-
-  // Specific state fields requested by user:
-  // 1. Age (বয়স)
-  // 2. Blood Group (রক্তের গ্রুপ)
-  // 3. Phone Number (ফোন নম্বর)
-  // 4. Location / Area (লোকেশন)
-  // 5. Last Donation Date (সর্বশেষ রক্তদানের তারিখ)
-  const [age, setAge] = useState<number>(myDonor.age || currentUser?.age || 26);
-  const [bloodGroup, setBloodGroup] = useState<BloodGroup>(myDonor.bloodGroup || (currentUser?.bloodGroup as BloodGroup) || 'O+');
-  const [phone, setPhone] = useState<string>(myDonor.phone || currentUser?.phone || '+880 1712 345678');
-  const [area, setArea] = useState<string>(myDonor.area || currentUser?.area || 'Dhanmondi, Dhaka');
-  const [lastDonationDate, setLastDonationDate] = useState<string>(
-    myDonor.lastDonationDate || currentUser?.lastDonationDate || '2026-04-12'
-  );
-  const [available, setAvailable] = useState<boolean>(myDonor.available ?? true);
+  const [age, setAge] = useState<number>(myDonor?.age || 25);
+  const [bloodGroup, setBloodGroup] = useState<BloodGroup>(myDonor?.bloodGroup || 'O+');
+  const [phone, setPhone] = useState<string>(myDonor?.phone || currentUser?.phone || '');
+  const [area, setArea] = useState<string>(myDonor?.area || '');
+  const [lastDonationDate, setLastDonationDate] = useState<string>(myDonor?.lastDonationDate || '');
+  const [available, setAvailable] = useState<boolean>(myDonor?.available ?? true);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const [savedSuccess, setSavedSuccess] = useState<boolean>(false);
 
@@ -51,20 +41,30 @@ export const DonorDashboard: React.FC = () => {
     }
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    updateDonorProfile(myDonor.id, {
-      age: Number(age),
-      bloodGroup,
-      phone,
-      area,
-      lastDonationDate,
-      available,
-    });
-
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3500);
+    setSaving(true);
+    setSaveError(null);
+    try {
+      await saveMyDonorProfile({
+        name: myDonor?.name || currentUser?.name,
+        age: Number(age),
+        bloodGroup,
+        phone,
+        area,
+        lastDonationDate,
+        available,
+        // Use the current GPS/area so blood seekers nearby can find this donor
+        lat: userLocation.lat,
+        lng: userLocation.lng,
+      });
+      setSavedSuccess(true);
+      setTimeout(() => setSavedSuccess(false), 3500);
+    } catch (err) {
+      setSaveError((err as Error)?.message || 'সেভ করা যায়নি');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const bloodGroups: BloodGroup[] = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
@@ -83,7 +83,7 @@ export const DonorDashboard: React.FC = () => {
           </div>
 
           <h2 className="font-display font-black text-2xl sm:text-3xl text-white flex items-center gap-2">
-            <span>{currentUser?.name || myDonor.name}</span>
+            <span>{currentUser?.name || myDonor?.name}</span>
             <span className="text-sm bg-white text-rose-700 font-extrabold px-2.5 py-0.5 rounded-lg shadow-sm">
               {bloodGroup}
             </span>
@@ -109,6 +109,15 @@ export const DonorDashboard: React.FC = () => {
           )}
         </div>
       </div>
+
+      {isNewProfile && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-2xl text-sm font-semibold">
+          আপনার রক্তদাতা প্রোফাইল এখনো তৈরি হয়নি। নিচের তথ্য পূরণ করে "সেভ" করলে রক্তপ্রার্থীরা আপনাকে খুঁজে পাবে।
+        </div>
+      )}
+      {saveError && (
+        <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-2xl text-sm font-semibold">{saveError}</div>
+      )}
 
       {/* Success Notification Alert */}
       {savedSuccess && (
@@ -280,10 +289,11 @@ export const DonorDashboard: React.FC = () => {
 
           <button
             type="submit"
-            className="px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white font-black text-sm rounded-xl shadow-md flex items-center gap-2 active:scale-95 transition-all"
+            disabled={saving}
+            className="px-6 py-3 disabled:opacity-60 bg-rose-600 hover:bg-rose-700 text-white font-black text-sm rounded-xl shadow-md flex items-center gap-2 active:scale-95 transition-all"
           >
             <Save className="w-4 h-4" />
-            <span>তথ্য সেভ করুন (Save Updates)</span>
+            <span>{saving ? 'সেভ হচ্ছে…' : 'তথ্য সেভ করুন (Save Updates)'}</span>
           </button>
         </div>
       </form>

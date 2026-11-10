@@ -68,3 +68,8 @@ export function getDirectionsUrl(target: DirectionsTarget): string {
 
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`;
 }
+
+/** Google Maps listing for the hospital — shows its real, current phone number and hours. */
+export function getPlaceSearchUrl(target: DirectionsTarget): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(buildDestinationQuery(target))}`;
+}

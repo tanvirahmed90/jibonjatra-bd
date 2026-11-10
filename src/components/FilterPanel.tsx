@@ -87,8 +87,11 @@ export const FilterPanel: React.FC<FilterPanelProps> = ({
       {/* Critical Facility Availability Checkboxes */}
       <div>
         <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-2">
-          Critical Availability (Required)
+          Confirmed Availability
         </label>
+        <p className="text-[11px] text-slate-500 -mt-1 mb-2">
+          শুধু সেই হাসপাতালগুলো দেখাবে যাদের স্ট্যাটাস অ্যাডমিন ফোন করে কনফার্ম করেছে।
+        </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
           <label className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs font-medium cursor-pointer transition-all ${
             filters.emergencyOnly ? 'bg-red-50 border-red-300 text-red-900 font-bold' : 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100'

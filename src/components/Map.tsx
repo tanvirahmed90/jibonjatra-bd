@@ -7,10 +7,13 @@ import { useApp } from '../context/AppContext';
 import { Hospital, BloodDonor, Ambulance } from '../types';
 import { Navigation, Layers, ShieldCheck, Phone, ExternalLink } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
-import { getDirectionsUrl } from '../utils/directions';
+import { getDirectionsUrl, getPlaceSearchUrl } from '../utils/directions';
 
 // Popups are raw HTML strings. Names/addresses come from OpenStreetMap and user registrations,
 // so they must be escaped — otherwise a crafted name like <img onerror=...> runs as script.
+const statusText = (st: string) =>
+  st === 'available' ? '🟢 Available' : st === 'limited' ? '🟡 Limited' : st === 'unavailable' ? '🔴 Full' : '⚪ Unknown';
+
 const esc = (v: unknown): string =>
   String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
 
@@ -207,13 +210,15 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${esc(hosp.address)}</div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px; background: #F8FAFC; padding: 6px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #E2E8F0;">
-              <div>Emergency: <strong>${hosp.facilities.emergency === 'available' ? '🟢 24/7' : '🟡 Limited'}</strong></div>
-              <div>ICU: <strong>${hosp.facilities.icu === 'available' ? '🟢 Available' : hosp.facilities.icu === 'limited' ? '🟡 Limited' : '🔴 Full'}</strong></div>
+              ${hosp.statusUpdatedAt
+                ? `<div>Emergency: <strong>${statusText(hosp.facilities.emergency)}</strong></div>
+                   <div>ICU: <strong>${statusText(hosp.facilities.icu)}</strong></div>`
+                : '<div style="grid-column: span 2;">ICU/বেড: রওনা দেওয়ার আগে ফোন করে নিশ্চিত হোন</div>'}
             </div>
 
             <div style="display: flex; gap: 6px;">
-              <a href="tel:${esc(hosp.emergencyHotline)}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
-                📞 Call Hotline
+              <a href="${hosp.emergencyHotline ? `tel:${esc(hosp.emergencyHotline)}` : esc(getPlaceSearchUrl(hosp))}" ${hosp.emergencyHotline ? '' : 'target="_blank" rel="noopener noreferrer"'} style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
+                📞 ${hosp.emergencyHotline ? 'Call' : 'নম্বর দেখুন'}
               </a>
               <a href="${esc(getDirectionsUrl(hosp))}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
                 🗺️ Directions
@@ -237,7 +242,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         const ambIcon = L.divIcon({
           className: 'custom-amb-marker',
           html: `
-            <div style="background: ${amb.status === 'available' ? '#16A34A' : '#EA580C'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
+            <div style="background: ${amb.status === 'available' ? '#16A34A' : amb.status === 'unknown' ? '#64748B' : '#EA580C'}; color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.3); cursor: pointer;">
               🚑
             </div>
           `,
@@ -248,8 +253,8 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
         const popupContent = () => `
           <div style="min-width: 190px; font-family: system-ui; padding: 4px;">
-            <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#B45309'}; font-weight: bold;">
-              ${amb.status === 'available' ? '🟢 Available' : '🟡 Busy'} • ETA: ${amb.etaMinutes}m
+            <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#475569'}; font-weight: bold;">
+              ${amb.status === 'available' ? '🟢 Available' : amb.status === 'busy' ? '🟡 Busy' : amb.status === 'offline' ? '⚫ Offline' : '📋 কল করে নিশ্চিত হোন'} • ~${amb.etaMinutes}m
             </div>
             <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${esc(amb.providerName)}</h4>
             <div style="font-size: 11px; color: #64748B;">${esc(amb.vehicleType)} • ${formatDistance(amb.distanceKm)}</div>
@@ -350,7 +355,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             />
             <span className="flex items-center gap-1 font-semibold">
               <span className="w-2 h-2 rounded-full bg-emerald-600"></span>
-              Ambulances ({ambulances.filter(a => a.status === 'available').length})
+              Ambulances ({ambulances.length})
             </span>
           </label>
 
