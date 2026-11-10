@@ -32,16 +32,6 @@ export const AmbulanceView: React.FC = () => {
 
   const sortedAmbulances = [...filteredAmbulances].sort((a, b) => a.distanceKm - b.distanceKm);
 
-  const handleInstantDispatch = (amb: Ambulance) => {
-    requestEmergencyAssistance('ambulance', {
-      assignedEntityName: amb.providerName,
-      assignedEntityPhone: amb.phone,
-      etaMinutes: amb.etaMinutes,
-    });
-    setDispatchAlert(`${amb.providerName}-কে সরাসরি কল করুন। কল করার পর "Share My Location" দিয়ে আপনার লোকেশন পাঠাতে পারেন।`);
-    setTimeout(() => setDispatchAlert(null), 6000);
-  };
-
   return (
     <div className="space-y-6">
       {/* Top Banner */}

@@ -27,6 +27,14 @@ const TYPE_LABEL: Record<EmergencyRequest['type'], string> = {
   icu: '🏨 ICU/NICU',
 };
 
+const Metric = ({ label, value, sub }: { label: string; value: number; sub?: string }) => (
+  <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-card-soft">
+    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{label}</span>
+    <span className="text-2xl font-black font-display text-slate-900 mt-1 block">{value}</span>
+    {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
+  </div>
+);
+
 /**
  * Admin panel — every number here comes from real data (no mock stats).
  * Access is enforced by the database (RLS): non-admins can't read emergencies or write hospital status.
@@ -92,14 +100,6 @@ export const AdminDashboard: React.FC = () => {
       </div>
     );
   }
-
-  const Metric = ({ label, value, sub }: { label: string; value: number; sub?: string }) => (
-    <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-card-soft">
-      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{label}</span>
-      <span className="text-2xl font-black font-display text-slate-900 mt-1 block">{value}</span>
-      {sub && <span className="text-[11px] text-slate-500">{sub}</span>}
-    </div>
-  );
 
   const tabBtn = (id: typeof tab, label: string) => (
     <button
