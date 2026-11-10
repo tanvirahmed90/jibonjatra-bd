@@ -23,3 +23,13 @@ jobs:
           name: dist
           path: dist
           retention-days: 3
+      # Extra build pointed at a local mock backend, used for automated smoke tests
+      - run: npm run build -- --outDir dist-e2e
+        env:
+          VITE_SUPABASE_URL: http://127.0.0.1:54321
+          VITE_SUPABASE_ANON_KEY: e2e-test-anon-key
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-e2e
+          path: dist-e2e
+          retention-days: 1
