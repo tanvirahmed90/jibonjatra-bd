@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, UserRole } from '../types';
 import { INITIAL_HOSPITALS, INITIAL_BLOOD_DONORS, INITIAL_AMBULANCES, INITIAL_USERS } from '../data/mockData';
 import { calculateDistanceKm, getGeolocationWithFallbacks } from '../utils/geo';
@@ -65,6 +65,29 @@ const DEFAULT_LOCATION: UserLocation = {
   address: 'Panthapath, Dhaka (Default Location)',
   isLive: false,
 };
+
+/**
+ * Debounced, quota-safe localStorage writer.
+ * The hospital list alone is ~1 MB of JSON. Writing it synchronously on every GPS tick
+ * (distances change → state changes → JSON.stringify + setItem) froze low-end Android
+ * phones and could throw QuotaExceededError. Now writes are batched and run when idle.
+ */
+const persistTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+function persistLater(key: string, value: unknown, delayMs = 1500) {
+  clearTimeout(persistTimers[key]);
+  persistTimers[key] = setTimeout(() => {
+    const write = () => {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (err) {
+        console.warn(`Could not persist ${key}:`, err);
+      }
+    };
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number };
+    if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(write, { timeout: 3000 });
+    else write();
+  }, delayMs);
+}
 
 async function reverseGeocode(lat: number, lng: number): Promise<string> {
   try {
@@ -195,15 +218,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('jibonjatra_hospitals_v8', JSON.stringify(hospitals));
+    persistLater('jibonjatra_hospitals_v8', hospitals);
   }, [hospitals]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_donors_v10', JSON.stringify(donors));
+    persistLater('jibonjatra_donors_v10', donors);
   }, [donors]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_ambulances_v8', JSON.stringify(ambulances));
+    persistLater('jibonjatra_ambulances_v8', ambulances);
   }, [ambulances]);
 
   useEffect(() => {
@@ -220,24 +243,39 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem('jibonjatra_user_location', JSON.stringify(userLocation));
+    persistLater('jibonjatra_user_location', userLocation, 300);
   }, [userLocation]);
+
+  // GPS bookkeeping refs (no re-render needed)
+  const manualAreaRef = useRef<boolean>(false); // user picked an area → don't let GPS ticks override it
+  const lastFixRef = useRef<{ lat: number; lng: number; accuracy: number } | null>(null);
+  const lastGeocodedRef = useRef<{ lat: number; lng: number } | null>(null);
+  const lastSyncRef = useRef<{ lat: number; lng: number } | null>(null);
 
   /**
    * Helper to apply new coordinates immediately (so distance calculations update with 0ms delay)
    * while resolving the human-readable address asynchronously.
    */
   const applyLocation = (lat: number, lng: number, isLive: boolean, initialAddress?: string) => {
+    // Reverse geocoding hits Nominatim (rate-limited) — only redo it after moving ~150 m
+    const lastGeo = lastGeocodedRef.current;
+    const needsGeocode = !initialAddress && (!lastGeo || calculateDistanceKm(lastGeo.lat, lastGeo.lng, lat, lng) >= 0.15);
+
     setUserLocation(prev => ({
       lat,
       lng,
-      address: initialAddress || (isLive ? `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})` : prev.address),
+      address:
+        initialAddress ||
+        (needsGeocode && isLive ? `GPS Location (${lat.toFixed(4)}, ${lng.toFixed(4)})` : prev.address),
       isLive,
     }));
 
+    if (!needsGeocode) return;
+    lastGeocodedRef.current = { lat, lng };
+
     reverseGeocode(lat, lng).then(addr => {
       setUserLocation(prev => {
-        if (Math.abs(prev.lat - lat) < 0.0001 && Math.abs(prev.lng - lng) < 0.0001) {
+        if (calculateDistanceKm(prev.lat, prev.lng, lat, lng) < 0.15) {
           return { ...prev, address: addr };
         }
         return prev;
@@ -251,6 +289,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const requestGeolocation = async (silent: boolean = false): Promise<boolean> => {
     try {
       const result = await getGeolocationWithFallbacks();
+      manualAreaRef.current = false; // user asked for live GPS → resume live tracking
+      lastGeocodedRef.current = null;
+      lastFixRef.current = { lat: result.lat, lng: result.lng, accuracy: result.accuracy ?? 9999 };
       applyLocation(result.lat, result.lng, true);
 
       if (!silent) {
@@ -289,25 +330,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   useEffect(() => {
     let watchId: number | null = null;
 
-    requestGeolocation(true).then((success) => {
-      if (typeof navigator !== 'undefined' && navigator.geolocation && success) {
-        try {
-          watchId = navigator.geolocation.watchPosition(
-            (pos) => {
-              if (pos.coords.accuracy <= 100) {
-                applyLocation(pos.coords.latitude, pos.coords.longitude, true);
-              }
-            },
-            () => {},
-            { enableHighAccuracy: true, maximumAge: 30000, timeout: 25000 }
-          );
-        } catch (e) {
-          console.warn('WatchPosition initialization error:', e);
-        }
+    let cancelled = false;
+
+    requestGeolocation(true).then(() => {
+      // Keep refining even if the first attempt timed out (Android GPS often needs 10-30 s
+      // for a satellite fix). Only skip when the browser can't do geolocation at all.
+      if (cancelled || typeof navigator === 'undefined' || !navigator.geolocation) return;
+      try {
+        watchId = navigator.geolocation.watchPosition(
+          (pos) => {
+            if (manualAreaRef.current) return; // respect a manually selected area
+
+            const { latitude, longitude, accuracy } = pos.coords;
+            const last = lastFixRef.current;
+            if (accuracy > 250 && last && last.accuracy <= 250) return; // ignore coarse jumps
+
+            const movedKm = last ? calculateDistanceKm(last.lat, last.lng, latitude, longitude) : Infinity;
+            const muchMoreAccurate = !last || accuracy < last.accuracy * 0.7;
+
+            // Only update state when the user actually moved (>25 m) or the fix got clearly better.
+            // Prevents re-rendering 1,300+ items and re-drawing the map on every GPS tick.
+            if (movedKm >= 0.025 || muchMoreAccurate) {
+              lastFixRef.current = { lat: latitude, lng: longitude, accuracy };
+              applyLocation(latitude, longitude, true);
+            }
+          },
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 10000, timeout: 30000 }
+        );
+      } catch (e) {
+        console.warn('WatchPosition initialization error:', e);
       }
     });
 
     return () => {
+      cancelled = true;
       if (watchId !== null && typeof navigator !== 'undefined' && navigator.geolocation) {
         navigator.geolocation.clearWatch(watchId);
       }
@@ -360,11 +417,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // Auto discover real nearby map facilities
-    syncLiveNearbyHospitals(userLocation.lat, userLocation.lng);
+    // Auto discover real nearby map facilities — only after moving ~1 km (network call)
+    const lastSync = lastSyncRef.current;
+    if (!lastSync || calculateDistanceKm(lastSync.lat, lastSync.lng, userLocation.lat, userLocation.lng) >= 1) {
+      lastSyncRef.current = { lat: userLocation.lat, lng: userLocation.lng };
+      syncLiveNearbyHospitals(userLocation.lat, userLocation.lng);
+    }
   }, [userLocation.lat, userLocation.lng]);
 
   const setUserCustomLocation = (lat: number, lng: number, address: string) => {
+    manualAreaRef.current = true;
+    lastGeocodedRef.current = { lat, lng };
     setUserLocation({
       lat,
       lng,

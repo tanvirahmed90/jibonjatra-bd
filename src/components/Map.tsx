@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
+import 'leaflet/dist/leaflet.css';
 import '@maplibre/maplibre-gl-leaflet';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { useApp } from '../context/AppContext';
 import { Hospital, BloodDonor, Ambulance } from '../types';
 import { Navigation, Layers, ShieldCheck, Phone, ExternalLink } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
+import { getDirectionsUrl } from '../utils/directions';
 
 interface MapProps {
   centerOnHospital?: Hospital | null;
@@ -24,6 +26,8 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
   const [showAmbulances, setShowAmbulances] = useState(true);
   const [showDonors, setShowDonors] = useState(true);
   const [isLocating, setIsLocating] = useState(false);
+  // Bumped on every map pan/zoom so markers are drawn only for the visible area
+  const [viewTick, setViewTick] = useState(0);
 
   // Initialize Leaflet Map with OpenFreeMap Liberty style
   useEffect(() => {
@@ -51,6 +55,22 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
       markersLayerRef.current = L.layerGroup().addTo(map);
       mapInstanceRef.current = map;
+      // Re-draw visible markers after pan/zoom — but never while a popup is open,
+      // otherwise the popup the user just tapped would be destroyed by the redraw.
+      let popupOpen = false;
+      let pendingRedraw = false;
+      map.on('popupopen', () => { popupOpen = true; });
+      map.on('popupclose', () => {
+        popupOpen = false;
+        if (pendingRedraw) {
+          pendingRedraw = false;
+          setViewTick(t => t + 1);
+        }
+      });
+      map.on('moveend', () => {
+        if (popupOpen) pendingRedraw = true;
+        else setViewTick(t => t + 1);
+      });
     }
 
     return () => {
@@ -98,6 +118,14 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
 
     layer.clearLayers();
 
+    // PERFORMANCE: previously ~1,300 DOM markers (all hospitals + ambulances + donors in
+    // Bangladesh) were rebuilt on every GPS tick, freezing Android phones. Now only markers
+    // inside the visible map area (+ a margin) are drawn, and popup HTML is built lazily
+    // only when a marker is tapped.
+    const visibleBounds = map.getBounds().pad(0.35);
+    const inView = (lat: number, lng: number) => visibleBounds.contains([lat, lng]);
+    const zoomedOut = map.getZoom() < 10;
+
     // 1. User Location Marker + 5km Nearby Radius Circle
     const userIcon = L.divIcon({
       className: 'custom-user-marker',
@@ -139,6 +167,8 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     if (showHospitals) {
       hospitalMarkersRef.current = {};
       hospitals.forEach(hosp => {
+        const isFocusedTarget = centerOnHospital?.id === hosp.id;
+        if (!isFocusedTarget && (!inView(hosp.lat, hosp.lng) || (zoomedOut && hosp.distanceKm > 5))) return;
         const isNearby = hosp.distanceKm <= 5;
         const isFocused = centerOnHospital?.id === hosp.id;
 
@@ -157,7 +187,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: isFocused ? [0, -21] : [0, -17],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 230px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
               <span style="font-size: 10px; background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
@@ -180,7 +210,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
               <a href="tel:${hosp.emergencyHotline}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
                 📞 Call Hotline
               </a>
-              <a href="https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hosp.lat},${hosp.lng}&travelmode=driving" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
+              <a href="${getDirectionsUrl(hosp)}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
                 🗺️ Directions
               </a>
             </div>
@@ -198,6 +228,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     // 3. Ambulances Markers (Yellow/Orange vehicle beacon)
     if (showAmbulances) {
       ambulances.forEach(amb => {
+        if (!inView(amb.lat, amb.lng) || zoomedOut) return;
         const ambIcon = L.divIcon({
           className: 'custom-amb-marker',
           html: `
@@ -210,7 +241,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: [0, -14],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 190px; font-family: system-ui; padding: 4px;">
             <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#B45309'}; font-weight: bold;">
               ${amb.status === 'available' ? '🟢 Available' : '🟡 Busy'} • ETA: ${amb.etaMinutes}m
@@ -232,6 +263,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
     // 4. Blood Donors Markers (Red Droplet)
     if (showDonors) {
       donors.filter(d => d.available).forEach(donor => {
+        if (!inView(donor.lat, donor.lng) || zoomedOut) return;
         const donorIcon = L.divIcon({
           className: 'custom-donor-marker',
           html: `
@@ -244,7 +276,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           popupAnchor: [0, -13],
         });
 
-        const popupContent = `
+        const popupContent = () => `
           <div style="min-width: 180px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; gap: 4px;">
               <span style="background: #FFE4E6; color: #BE123C; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 800;">
@@ -264,7 +296,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
         layer.addLayer(marker);
       });
     }
-  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors, centerOnHospital]);
+  }, [hospitals, donors, ambulances, userLocation, showHospitals, showAmbulances, showDonors, centerOnHospital, viewTick]);
 
   const handleMyLocationClick = async () => {
     setIsLocating(true);

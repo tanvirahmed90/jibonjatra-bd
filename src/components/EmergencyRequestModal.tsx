@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { X, Phone, Navigation, AlertTriangle, CheckCircle2, Clock, MapPin, Loader2, ArrowRight, Map as MapIcon, ExternalLink } from 'lucide-react';
 import { BloodGroup, Hospital, Ambulance, BloodDonor } from '../types';
 import { formatDistance, POPULAR_BANGLADESH_AREAS } from '../utils/geo';
+import { getDirectionsUrl } from '../utils/directions';
 
 interface EmergencyRequestModalProps {
   isOpen: boolean;
@@ -46,6 +47,14 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
   const [showAreaPicker, setShowAreaPicker] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Emergency Request Created');
   const [assignedInfo, setAssignedInfo] = useState<AssignedInfo | null>(null);
+  // Directions always start from the phone's own live GPS (no forced origin) — see utils/directions.ts
+  const navDirectionsUrl = assignedInfo
+    ? getDirectionsUrl(
+        assignedInfo.hospital
+          ? assignedInfo.hospital
+          : { name: assignedInfo.name, lat: assignedInfo.lat, lng: assignedInfo.lng, address: assignedInfo.address, id: 'live-osm-target' } // ambulance/donor: use exact pin
+      )
+    : getDirectionsUrl({ name: 'hospital near me' });
 
   // Automatically request location when emergency mode is entered
   useEffect(() => {
@@ -540,19 +549,9 @@ export const EmergencyRequestModal: React.FC<EmergencyRequestModalProps> = ({ is
               {/* Real Location Navigation Buttons */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 border-t border-slate-200">
                 <a
-                  href={assignedInfo?.lat && assignedInfo?.lng
-                    ? `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
-                    : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignedInfo?.name || 'hospital')}`
-                  }
+                  href={navDirectionsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  onClick={(e) => {
-                    const navUrl = (assignedInfo?.lat && assignedInfo?.lng)
-                      ? `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${assignedInfo.lat},${assignedInfo.lng}&travelmode=driving`
-                      : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignedInfo?.name || 'hospital')}`;
-                    window.open(navUrl, '_blank', 'noopener,noreferrer');
-                    e.preventDefault();
-                  }}
                   className="py-2 sm:py-2.5 px-3 bg-blue-50 hover:bg-blue-100 text-blue-800 border border-blue-200 rounded-xl font-bold text-[11px] sm:text-xs flex items-center justify-center gap-1.5 transition-all shadow-xs text-center cursor-pointer"
                   title="Open live Google Maps turn-by-turn directions from your phone's GPS"
                 >

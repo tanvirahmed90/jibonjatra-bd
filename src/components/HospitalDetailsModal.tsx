@@ -3,7 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { X, Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, AlertTriangle, Bed, HeartPulse } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
-import { useApp } from '../context/AppContext';
+import { getDirectionsUrl as buildDirectionsUrl } from '../utils/directions';
 
 interface HospitalDetailsModalProps {
   hospital: Hospital | null;
@@ -11,7 +11,6 @@ interface HospitalDetailsModalProps {
 }
 
 export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hospital, onClose }) => {
-  const { userLocation } = useApp();
   if (!hospital) return null;
 
   const facilitiesList = [
@@ -27,9 +26,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
     { key: 'pharmacy', label: '24/7 Emergency Pharmacy', desc: 'In-house emergency medications & antidotes' },
   ] as const;
 
-  const getDirectionsUrl = () => {
-    return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`;
-  };
+  const getDirectionsUrl = () => buildDirectionsUrl(hospital);
 
   return (
     <div className="fixed inset-0 z-[1200] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto">

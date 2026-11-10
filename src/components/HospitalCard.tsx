@@ -3,7 +3,7 @@ import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
 import { Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, Wind } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
-import { useApp } from '../context/AppContext';
+import { getDirectionsUrl } from '../utils/directions';
 
 interface HospitalCardProps {
   hospital: Hospital;
@@ -11,10 +11,7 @@ interface HospitalCardProps {
 }
 
 export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDetails }) => {
-  const { userLocation } = useApp();
-  const getDirectionsUrl = () => {
-    return `https://www.google.com/maps/dir/?api=1&origin=${userLocation.lat},${userLocation.lng}&destination=${hospital.lat},${hospital.lng}&travelmode=driving`;
-  };
+  const directionsUrl = getDirectionsUrl(hospital);
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/80 shadow-card-soft hover:shadow-card-hover transition-all duration-300 flex flex-col overflow-hidden group">
@@ -127,7 +124,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
           </a>
 
           <a
-            href={getDirectionsUrl()}
+            href={directionsUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold py-2.5 px-2 rounded-xl text-xs border border-blue-200 transition-all text-center"

@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { EmergencyButton } from '../components/EmergencyButton';
 import { HospitalCard } from '../components/HospitalCard';
-import { Map } from '../components/Map';
+import { Map } from '../components/LazyMap';
 import { SearchBar } from '../components/SearchBar';
 import { FilterPanel, FilterState } from '../components/FilterPanel';
 import { SafetyDisclaimer } from '../components/SafetyDisclaimer';
@@ -82,7 +82,7 @@ export const HomeView: React.FC = () => {
         {/* Background Image */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat transform scale-105"
-          style={{ backgroundImage: `url('/hero-banner.png')` }}
+          style={{ backgroundImage: `url('/hero-banner.webp')` }}
         />
         {/* Elegant overlay to highlight background while ensuring maximum readability */}
         <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/80 to-white/92 backdrop-blur-[1px]" />

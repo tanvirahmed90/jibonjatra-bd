@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { Navbar } from './components/Navbar';
 import { MobileBottomNav } from './components/MobileBottomNav';
@@ -13,9 +13,10 @@ import { HomeView } from './views/HomeView';
 import { HospitalsView } from './views/HospitalsView';
 import { BloodView } from './views/BloodView';
 import { AmbulanceView } from './views/AmbulanceView';
-import { AmbulanceDashboard } from './components/AmbulanceDashboard';
-import { AdminDashboard } from './components/AdminDashboard';
-import { DonorDashboard } from './components/DonorDashboard';
+// Dashboards are only used by logged-in roles — load their code on demand
+const AmbulanceDashboard = lazy(() => import('./components/AmbulanceDashboard').then(m => ({ default: m.AmbulanceDashboard })));
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })));
+const DonorDashboard = lazy(() => import('./components/DonorDashboard').then(m => ({ default: m.DonorDashboard })));
 
 const MainContent: React.FC = () => {
   const {
@@ -80,7 +81,9 @@ const MainContent: React.FC = () => {
 
       {/* Main Page Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-6 sm:py-8 pb-28 md:pb-12">
-        {renderActiveView()}
+        <Suspense fallback={<div className="py-20 text-center text-sm text-slate-500 animate-pulse">লোড হচ্ছে…</div>}>
+          {renderActiveView()}
+        </Suspense>
       </main>
 
       {/* Footer */}
