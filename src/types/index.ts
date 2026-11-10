@@ -60,6 +60,8 @@ export interface Hospital {
   areaTags?: string[];
   /** Coordinates are area-level estimates (registry data), not the exact building */
   locationApprox?: boolean;
+  /** How precise lat/lng are: 'area' = upazila centre; 'city'/'district' = too coarse to compute a distance */
+  locationPrecision?: 'exact' | 'area' | 'city' | 'district';
   /** ISO time of the last admin-confirmed status update (from hospital_status) */
   statusUpdatedAt?: string;
 }

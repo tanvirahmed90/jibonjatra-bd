@@ -176,6 +176,8 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
       hospitalMarkersRef.current = {};
       hospitals.forEach(hosp => {
         const isFocusedTarget = centerOnHospital?.id === hosp.id;
+        // Coarse (city/district-level) coordinates would put the pin in the wrong place
+        if (hosp.locationPrecision === 'city' || hosp.locationPrecision === 'district') return;
         if (!isFocusedTarget && (!inView(hosp.lat, hosp.lng) || (zoomedOut && hosp.distanceKm > 5))) return;
         const isNearby = hosp.distanceKm <= 5;
         const isFocused = centerOnHospital?.id === hosp.id;

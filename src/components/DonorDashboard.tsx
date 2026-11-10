@@ -244,7 +244,7 @@ export const DonorDashboard: React.FC = () => {
               <Calendar className="w-4 h-4 text-rose-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="date"
-                required
+                max={new Date().toISOString().split('T')[0]}
                 value={lastDonationDate}
                 onChange={(e) => setLastDonationDate(e.target.value)}
                 className="w-full text-sm font-semibold pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 focus:outline-none cursor-pointer"

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo, useCallback, ReactNode } from 'react';
 import { Hospital, BloodDonor, Ambulance, EmergencyRequest, User, BloodGroup, HospitalFacilityStatus } from '../types';
-import { calculateDistanceKm, getGeolocationWithFallbacks } from '../utils/geo';
+import { calculateDistanceKm, getGeolocationWithFallbacks, UNKNOWN_DISTANCE_KM } from '../utils/geo';
 import { fetchLiveNearbyHospitals, mergeWithLiveHospitals } from '../utils/liveMapService';
 import {
   auth,
@@ -648,7 +648,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         facilities: st ? { ...UNKNOWN_FACILITIES, ...(st.facilities as Partial<HospitalFacilityStatus>) } : h.facilities || UNKNOWN_FACILITIES,
         emergencyHotline: st?.phone || h.emergencyHotline,
         statusUpdatedAt: st?.updated_at,
-        distanceKm: calculateDistanceKm(userLocation.lat, userLocation.lng, h.lat, h.lng),
+        distanceKm:
+          h.locationPrecision === 'city' || h.locationPrecision === 'district'
+            ? UNKNOWN_DISTANCE_KM
+            : calculateDistanceKm(userLocation.lat, userLocation.lng, h.lat, h.lng),
       };
     });
   }, [baseHospitals, liveHospitals, hospitalStatus, userLocation.lat, userLocation.lng]);

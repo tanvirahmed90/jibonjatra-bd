@@ -31,7 +31,7 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
         {/* Distance Badge */}
         <div className="absolute top-3 left-3 bg-red-600/95 backdrop-blur-sm text-white px-2.5 py-1 rounded-full text-xs font-bold shadow-md flex items-center gap-1">
           <MapPin className="w-3.5 h-3.5" />
-          <span>{hospital.locationApprox ? '~' : ''}{formatDistance(hospital.distanceKm)}</span>
+          <span>{hospital.locationApprox && hospital.distanceKm < 9999 ? '~' : ''}{formatDistance(hospital.distanceKm)}</span>
         </div>
 
         {/* Verified Facility Badge or Live Map Sync Badge */}

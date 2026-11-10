@@ -21,7 +21,13 @@ export function calculateDistanceKm(
   return Math.round(distance * 10) / 10;
 }
 
+/** Used when a facility's coordinates are too coarse (city/district level) to give a real distance */
+export const UNKNOWN_DISTANCE_KM = 9999;
+
 export function formatDistance(distanceKm: number): string {
+  if (distanceKm >= UNKNOWN_DISTANCE_KM) {
+    return 'দূরত্ব অজানা';
+  }
   if (distanceKm < 1) {
     return `${Math.round(distanceKm * 1000)} m away`;
   }
