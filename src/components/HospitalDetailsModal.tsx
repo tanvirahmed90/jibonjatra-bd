@@ -1,7 +1,7 @@
 import React from 'react';
 import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
-import { X, Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, AlertTriangle, Bed, HeartPulse } from 'lucide-react';
+import { X, Phone, MapPin, ExternalLink, Star, ShieldCheck, Building2, AlertTriangle, Bed, HeartPulse } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
 import { getDirectionsUrl as buildDirectionsUrl } from '../utils/directions';
 
@@ -68,11 +68,13 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
               <span className="text-xs uppercase bg-white/20 backdrop-blur-sm px-2 py-0.5 rounded font-semibold text-slate-100">
                 {hospital.type}
               </span>
-              <div className="flex items-center gap-1 text-amber-300 text-xs font-semibold">
-                <Star className="w-3.5 h-3.5 fill-amber-400" />
-                <span>{hospital.rating.toFixed(1)}</span>
-                <span className="text-slate-300">({hospital.reviewCount} verified reviews)</span>
-              </div>
+              {hospital.reviewCount > 0 && (
+                <div className="flex items-center gap-1 text-amber-300 text-xs font-semibold">
+                  <Star className="w-3.5 h-3.5 fill-amber-400" />
+                  <span>{hospital.rating.toFixed(1)}</span>
+                  <span className="text-slate-300">({hospital.reviewCount} reviews)</span>
+                </div>
+              )}
             </div>
             <h2 className="font-display font-black text-xl sm:text-2xl text-white">
               {hospital.name}
@@ -91,7 +93,7 @@ export const HospitalDetailsModal: React.FC<HospitalDetailsModalProps> = ({ hosp
             <div>
               <p className="font-bold">Emergency Verification Reminder:</p>
               <p className="mt-0.5 text-amber-800">
-                Bed and ventilator availabilities change continuously. Please call the emergency hotline directly to confirm immediate admission before patient transfer. Last synced: <strong>{hospital.lastUpdated}</strong>.
+                Bed and ventilator availabilities change continuously. Please call the emergency hotline directly to confirm immediate admission before patient transfer.
               </p>
             </div>
           </div>

@@ -120,7 +120,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const saved = localStorage.getItem('jibonjatra_hospitals_v8');
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        // Drop previously cached live-map entries: older versions stored them with
+        // made-up ICU/NICU "Available" values. They are re-fetched fresh on startup.
+        const parsed = (JSON.parse(saved) as Hospital[]).filter?.(h => !h.id?.startsWith('live-osm-'));
         if (Array.isArray(parsed) && parsed.length >= INITIAL_HOSPITALS.length) {
           return parsed;
         }

@@ -1,7 +1,7 @@
 import React from 'react';
 import { Hospital } from '../types';
 import { FacilityStatus } from './FacilityStatus';
-import { Phone, MapPin, ExternalLink, Star, ShieldCheck, Clock, Building2, Wind } from 'lucide-react';
+import { Phone, MapPin, ExternalLink, Star, ShieldCheck, Building2, Wind } from 'lucide-react';
 import { formatDistance } from '../utils/geo';
 import { getDirectionsUrl } from '../utils/directions';
 
@@ -50,11 +50,13 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
             <span className="text-xs font-medium uppercase tracking-wider text-red-200 bg-red-950/60 px-2 py-0.5 rounded">
               {hospital.type}
             </span>
-            <div className="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded text-xs font-semibold text-amber-300">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>{hospital.rating.toFixed(1)}</span>
-              <span className="text-slate-300 text-[10px]">({hospital.reviewCount})</span>
-            </div>
+            {hospital.reviewCount > 0 && (
+              <div className="flex items-center gap-1 bg-black/40 px-2 py-0.5 rounded text-xs font-semibold text-amber-300">
+                <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                <span>{hospital.rating.toFixed(1)}</span>
+                <span className="text-slate-300 text-[10px]">({hospital.reviewCount})</span>
+              </div>
+            )}
           </div>
           <h3 className="font-display font-bold text-base sm:text-lg leading-tight line-clamp-1 mt-1 text-white">
             {hospital.name}
@@ -99,16 +101,11 @@ export const HospitalCard: React.FC<HospitalCardProps> = ({ hospital, onViewDeta
         </div>
 
         {/* Oxygen & Live Bed Stock summary if available */}
-        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-0.5">
+        <div className="flex items-center text-[11px] text-slate-500 pt-0.5">
           <div className="flex items-center gap-1.5">
             <Wind className="w-3 h-3 text-cyan-600" />
             <span>Oxygen Plant:</span>
             <span className="font-medium text-slate-700 capitalize">{hospital.facilities.oxygen}</span>
-          </div>
-
-          <div className="flex items-center gap-1 text-slate-400" title="Data freshness">
-            <Clock className="w-3 h-3 text-slate-400" />
-            <span>Updated: {hospital.lastUpdated}</span>
           </div>
         </div>
 

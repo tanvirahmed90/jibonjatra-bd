@@ -96,7 +96,7 @@ export async function fetchLiveNearbyHospitals(
   userLng: number,
   radiusDelta: number = 0.065 // ~7km radius box
 ): Promise<Hospital[]> {
-  const cacheKey = `jibonjatra_live_map_${userLat.toFixed(2)}_${userLng.toFixed(2)}`;
+  const cacheKey = `jibonjatra_live_map_v2_${userLat.toFixed(2)}_${userLng.toFixed(2)}`;
   
   // Check fast in-memory or sessionStorage cache
   try {
@@ -183,38 +183,34 @@ export async function fetchLiveNearbyHospitals(
         district: district || 'Dhaka',
         upazila: upazila || 'Dhaka',
         address: cleanAddress,
-        phone: '+880 2 55165000',
+        phone: '', // OSM has no reliable phone — CALL falls back to the national 16263 health hotline
         emergencyHotline: '16263', // 24/7 National Health Hotline
         lat,
         lng,
         distanceKm,
-        rating: Math.round((4.2 + (index % 7) * 0.1) * 10) / 10,
-        reviewCount: 150 + (index * 47) % 600,
+        // SAFETY: OpenStreetMap only tells us a facility EXISTS. It says nothing about ICU/NICU
+        // beds, blood bank, ratings or DGHS verification. Previously these were filled with
+        // made-up "Available" values — dangerous in an emergency app. Now they are "unknown"
+        // so the UI shows "call to confirm" instead of a false promise.
+        rating: 0,
+        reviewCount: 0,
         image: MEDICAL_IMAGES[imageIndex],
-        bedCount: 120 + (index * 35) % 300,
+        bedCount: 0,
         facilities: {
-          emergency: 'available',
-          icu: 'available',
-          nicu: (index % 2 === 0) ? 'available' : 'limited',
-          ccu: 'available',
-          hdu: 'available',
-          ot: 'available',
-          bloodBank: 'available',
-          oxygen: 'available',
-          ventilator: 'available',
-          pharmacy: 'available',
-        },
-        bedStock: {
-          icuAvailable: 3 + (index % 5),
-          icuTotal: 12 + (index % 8),
-          nicuAvailable: 2 + (index % 4),
-          nicuTotal: 8 + (index % 6),
-          emergencyAvailable: 6 + (index % 6),
-          generalAvailable: 25 + (index % 30),
+          emergency: 'unknown',
+          icu: 'unknown',
+          nicu: 'unknown',
+          ccu: 'unknown',
+          hdu: 'unknown',
+          ot: 'unknown',
+          bloodBank: 'unknown',
+          oxygen: 'unknown',
+          ventilator: 'unknown',
+          pharmacy: 'unknown',
         },
         lastUpdated: 'Live Map Sync (Active)',
-        verified: true,
-        mohfwVerified: true,
+        verified: false,
+        mohfwVerified: false,
         notes: `Real-time healthcare facility auto-discovered from live GPS map (${distanceKm.toFixed(1)} km).`,
         areaTags: [suburb.toLowerCase(), city.toLowerCase(), 'live map', 'gps verified']
       };

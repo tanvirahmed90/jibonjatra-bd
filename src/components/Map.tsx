@@ -9,6 +9,11 @@ import { Navigation, Layers, ShieldCheck, Phone, ExternalLink } from 'lucide-rea
 import { formatDistance } from '../utils/geo';
 import { getDirectionsUrl } from '../utils/directions';
 
+// Popups are raw HTML strings. Names/addresses come from OpenStreetMap and user registrations,
+// so they must be escaped — otherwise a crafted name like <img onerror=...> runs as script.
+const esc = (v: unknown): string =>
+  String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
 interface MapProps {
   centerOnHospital?: Hospital | null;
   height?: string;
@@ -146,7 +151,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             <span>📍 Your Location</span>
             ${userLocation.isLive ? '<span style="background: #DCFCE7; color: #15803D; font-size: 9px; padding: 1px 5px; border-radius: 999px; font-weight: 700;">LIVE GPS</span>' : ''}
           </div>
-          <div style="font-size: 11px; color: #334155; margin-top: 4px; font-weight: 500;">${userLocation.address}</div>
+          <div style="font-size: 11px; color: #334155; margin-top: 4px; font-weight: 500;">${esc(userLocation.address)}</div>
           <div style="font-size: 10px; color: #64748B; margin-top: 3px;">Showing nearby hospitals within immediate radius.</div>
         </div>
       `);
@@ -191,15 +196,15 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           <div style="min-width: 230px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; justify-content: space-between; gap: 4px; margin-bottom: 4px;">
               <span style="font-size: 10px; background: #FEE2E2; color: #991B1B; padding: 2px 6px; border-radius: 4px; font-weight: 700;">
-                ${hosp.type}
+                ${esc(hosp.type)}
               </span>
               <span style="font-size: 11px; color: ${isNearby ? '#15803D' : '#475569'}; font-weight: 800;">
                 ${isNearby ? '🟢 ' : ''}${formatDistance(hosp.distanceKm)}
               </span>
             </div>
-            <h4 style="margin: 4px 0 2px; font-size: 14px; font-weight: 800; color: #0F172A; line-height: 1.2;">${hosp.name}</h4>
-            ${hosp.banglaName ? `<div style="font-size: 11px; color: #64748B; margin-bottom: 3px;">${hosp.banglaName}</div>` : ''}
-            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${hosp.address}</div>
+            <h4 style="margin: 4px 0 2px; font-size: 14px; font-weight: 800; color: #0F172A; line-height: 1.2;">${esc(hosp.name)}</h4>
+            ${hosp.banglaName ? `<div style="font-size: 11px; color: #64748B; margin-bottom: 3px;">${esc(hosp.banglaName)}</div>` : ''}
+            <div style="font-size: 11px; color: #475569; margin-bottom: 6px;">📍 ${esc(hosp.address)}</div>
             
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px; font-size: 10px; background: #F8FAFC; padding: 6px; border-radius: 6px; margin-bottom: 8px; border: 1px solid #E2E8F0;">
               <div>Emergency: <strong>${hosp.facilities.emergency === 'available' ? '🟢 24/7' : '🟡 Limited'}</strong></div>
@@ -207,10 +212,10 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             </div>
 
             <div style="display: flex; gap: 6px;">
-              <a href="tel:${hosp.emergencyHotline}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
+              <a href="tel:${esc(hosp.emergencyHotline)}" style="flex: 1; background: #DC2626; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 700; text-decoration: none;">
                 📞 Call Hotline
               </a>
-              <a href="${getDirectionsUrl(hosp)}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
+              <a href="${esc(getDirectionsUrl(hosp))}" target="_blank" rel="noopener noreferrer" style="flex: 1; background: #1E293B; color: white; text-align: center; padding: 7px; border-radius: 6px; font-size: 11px; font-weight: 600; text-decoration: none;">
                 🗺️ Directions
               </a>
             </div>
@@ -246,10 +251,10 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
             <div style="font-size: 10px; color: ${amb.status === 'available' ? '#15803D' : '#B45309'}; font-weight: bold;">
               ${amb.status === 'available' ? '🟢 Available' : '🟡 Busy'} • ETA: ${amb.etaMinutes}m
             </div>
-            <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${amb.providerName}</h4>
-            <div style="font-size: 11px; color: #64748B;">${amb.vehicleType} • ${formatDistance(amb.distanceKm)}</div>
-            <a href="tel:${amb.phone}" style="display: block; margin-top: 6px; background: #DC2626; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
-              📞 Call Ambulance (${amb.phone})
+            <h4 style="margin: 4px 0 2px; font-size: 13px; font-weight: bold;">${esc(amb.providerName)}</h4>
+            <div style="font-size: 11px; color: #64748B;">${esc(amb.vehicleType)} • ${formatDistance(amb.distanceKm)}</div>
+            <a href="tel:${esc(amb.phone)}" style="display: block; margin-top: 6px; background: #DC2626; color: white; text-align: center; padding: 6px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+              📞 Call Ambulance (${esc(amb.phone)})
             </a>
           </div>
         `;
@@ -268,7 +273,7 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           className: 'custom-donor-marker',
           html: `
             <div style="background: #E11D48; color: white; width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 900; border: 2px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.25); cursor: pointer;">
-              ${donor.bloodGroup}
+              ${esc(donor.bloodGroup)}
             </div>
           `,
           iconSize: [26, 26],
@@ -280,12 +285,12 @@ export const Map: React.FC<MapProps> = ({ centerOnHospital, height = 'h-[460px] 
           <div style="min-width: 180px; font-family: system-ui; padding: 4px;">
             <div style="display: flex; align-items: center; gap: 4px;">
               <span style="background: #FFE4E6; color: #BE123C; padding: 1px 6px; border-radius: 4px; font-size: 11px; font-weight: 800;">
-                ${donor.bloodGroup}
+                ${esc(donor.bloodGroup)}
               </span>
-              <span style="font-size: 11px; font-weight: bold; color: #1E293B;">${donor.name}</span>
+              <span style="font-size: 11px; font-weight: bold; color: #1E293B;">${esc(donor.name)}</span>
             </div>
-            <div style="font-size: 11px; color: #64748B; margin: 4px 0;">${donor.area} • ${formatDistance(donor.distanceKm)}</div>
-            <a href="tel:${donor.phone}" style="display: block; background: #16A34A; color: white; text-align: center; padding: 5px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
+            <div style="font-size: 11px; color: #64748B; margin: 4px 0;">${esc(donor.area)} • ${formatDistance(donor.distanceKm)}</div>
+            <a href="tel:${esc(donor.phone)}" style="display: block; background: #16A34A; color: white; text-align: center; padding: 5px; border-radius: 6px; font-size: 11px; font-weight: bold; text-decoration: none;">
               📞 Call Donor
             </a>
           </div>
